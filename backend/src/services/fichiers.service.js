@@ -1,33 +1,30 @@
 // ─────────────────────────────────────────────────────────────
-//  Service fichiers : enregistrement, suppression, purge à l'expédition
-//  Les fichiers sont sur disque (uploads/commande_<id>/), seules les
-//  métadonnées sont en base.
+//  Service fichiers : enregistrement, suppression, purge à l'expédition.
+//  Le stockage physique est délégué à la couche storage (disk ou Blob).
+//  La base ne contient que les métadonnées (clé, url, taille…).
 // ─────────────────────────────────────────────────────────────
-import path from 'node:path';
-import fs from 'node:fs';
 import { prisma } from '../prisma.js';
-import { config } from '../config.js';
 import { addLog } from './log.service.js';
 import { LOG_ACTIONS } from '../constants.js';
+import { saveBuffer, deleteByKey, deletePrefix, makeFilename } from '../storage.js';
 
-export function getOrderDir(commandeId) {
-  return path.join(config.uploadDir, `commande_${commandeId}`);
-}
-
-export function getAbsolutePath(fichier) {
-  return path.join(config.uploadDir, fichier.chemin);
-}
-
-// Enregistre en base un fichier déjà écrit sur disque par multer.
+// Enregistre un fichier (buffer multer) : stockage + métadonnées + log.
 // ligneId : rattache le visuel à une ligne précise (optionnel).
 export async function recordFichier(commandeId, file, userId, ligneId = null) {
-  // Chemin relatif au dossier d'upload (gère le sous-dossier ligne_<id>).
-  const chemin = path.relative(config.uploadDir, file.path);
+  const filename = makeFilename(file.originalname);
+  const subdir = ligneId
+    ? `commande_${commandeId}/ligne_${ligneId}`
+    : `commande_${commandeId}`;
+  const { key, url } = await saveBuffer(file.buffer, {
+    subdir, filename, contentType: file.mimetype,
+  });
+
   const fichier = await prisma.fichier.create({
     data: {
       nom: file.originalname,
-      nomStockage: file.filename,
-      chemin,
+      nomStockage: filename,
+      chemin: key,
+      url,
       taille: file.size,
       type: file.mimetype,
       commandeId,
@@ -43,14 +40,17 @@ export async function recordFichier(commandeId, file, userId, ligneId = null) {
   return fichier;
 }
 
-// Supprime un visuel : disque + base + log.
+export function getAttachments(commandeId) {
+  return prisma.fichier.findMany({ where: { commandeId }, orderBy: { createdAt: 'asc' } });
+}
+
+export function getAttachment(id) {
+  return prisma.fichier.findUnique({ where: { id: Number(id) } });
+}
+
+// Supprime un visuel : stockage + base + log.
 export async function deleteFichier(fichier, userId) {
-  const absPath = getAbsolutePath(fichier);
-  try {
-    if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
-  } catch (err) {
-    console.error('Erreur suppression fichier disque :', err.message);
-  }
+  await deleteByKey(fichier.chemin, fichier.url);
   await prisma.fichier.delete({ where: { id: fichier.id } });
   await addLog({
     action: LOG_ACTIONS.FICHIER_SUPPRIME,
@@ -60,8 +60,7 @@ export async function deleteFichier(fichier, userId) {
   });
 }
 
-// Supprime tous les visuels rattachés à une ligne (disque + base + logs).
-// Utilisé quand une ligne est retirée lors de l'édition d'une commande.
+// Supprime tous les visuels d'une ligne (utilisé quand une ligne est retirée).
 export async function deleteFichiersForLigne(ligneId, userId) {
   const files = await prisma.fichier.findMany({ where: { ligneId } });
   for (const f of files) await deleteFichier(f, userId);
@@ -69,41 +68,19 @@ export async function deleteFichiersForLigne(ligneId, userId) {
 }
 
 // ── Purge automatique à l'expédition ──
-// Supprime TOUS les fichiers d'une commande (disque + base), conserve la
-// commande, met à jour fichiersSupprimes/At et journalise l'opération.
 export async function purgeFichiers(commandeId, userId) {
-  const fichiers = await prisma.fichier.findMany({ where: { commandeId } });
-  const count = fichiers.length;
+  const count = await prisma.fichier.count({ where: { commandeId } });
 
-  // Suppression physique des fichiers.
-  for (const f of fichiers) {
-    const absPath = getAbsolutePath(f);
-    try {
-      if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
-    } catch (err) {
-      console.error('Erreur purge fichier disque :', err.message);
-    }
-  }
-
-  // Suppression du dossier de la commande.
-  const dir = getOrderDir(commandeId);
-  try {
-    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
-  } catch (err) {
-    console.error('Erreur suppression dossier commande :', err.message);
-  }
-
-  // Suppression des métadonnées de fichiers (on garde la commande).
+  // Supprime tout le préfixe de la commande (toutes ses lignes incluses).
+  await deletePrefix(`commande_${commandeId}`);
   await prisma.fichier.deleteMany({ where: { commandeId } });
 
-  // Marque la commande.
   const now = new Date();
   await prisma.commande.update({
     where: { id: commandeId },
     data: { fichiersSupprimes: true, fichiersSupprimesAt: now },
   });
 
-  // Journalise.
   const dateStr = now.toLocaleString('fr-FR');
   await addLog({
     action: LOG_ACTIONS.FICHIERS_SUPPRIMES,
@@ -113,6 +90,5 @@ export async function purgeFichiers(commandeId, userId) {
     userId,
     commandeId,
   });
-
   return count;
 }

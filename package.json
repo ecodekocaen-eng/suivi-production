@@ -1,0 +1,13 @@
+{
+  "name": "suivi-production",
+  "version": "1.0.0",
+  "description": "Suivi de production ECODEKO — déploiement Vercel (frontend statique + API serverless)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "vercel-build": "npm --prefix backend install && npm --prefix backend run prisma:generate:pg && npm --prefix frontend install && npm --prefix frontend run build"
+  }
+}

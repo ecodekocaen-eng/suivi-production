@@ -1,23 +1,15 @@
-// ─────────────────────────────────────────────────────────────
-//  Schéma Prisma — Suivi de production ECODEKO
-//
-//  DÉVELOPPEMENT  : SQLite (aucune installation requise).
-//  PRODUCTION     : pour PostgreSQL, remplacer provider = "sqlite"
-//                   par provider = "postgresql" ci-dessous, puis
-//                   `npx prisma migrate dev`. DATABASE_URL pointe vers
-//                   le fichier SQLite (dev) ou le serveur Postgres (prod).
-//
-//  NB : Prisma ne supporte pas les `enum` sous SQLite. Les champs
-//  `role` et `statut` sont donc des String validées côté serveur
-//  (voir src/constants.js). Cela garde le code identique dev/prod.
-// ─────────────────────────────────────────────────────────────
+// ⚠️ Schéma PostgreSQL — déploiement Vercel (Neon).
+// Modèles identiques à schema.prisma (local SQLite). Build :
+//   prisma generate --schema prisma/schema.postgres.prisma
+//   prisma migrate deploy --schema prisma/schema.postgres.prisma
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

@@ -9,6 +9,8 @@
     "start:preview": "NODE_ENV=production PORT=4100 node src/server.js",
     "dev": "node --watch src/server.js",
     "prisma:generate": "prisma generate",
+    "prisma:generate:pg": "prisma generate --schema prisma/schema.postgres.prisma",
+    "prisma:push:pg": "prisma db push --schema prisma/schema.postgres.prisma",
     "prisma:push": "prisma db push",
     "seed": "node scripts/seed-admin.js",
     "import": "node scripts/import-csv.js"
@@ -18,6 +20,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
+    "@vercel/blob": "^2.4.1",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",

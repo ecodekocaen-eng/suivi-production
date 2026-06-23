@@ -1,38 +1,34 @@
 // ─────────────────────────────────────────────────────────────
 //  Contrôleur du catalogue de produits (types de mug).
-//  Lecture : tout utilisateur authentifié (pour le sélecteur de lignes).
-//  Écriture : ADMIN uniquement (voir routes).
+//  Lecture : tout utilisateur authentifié. Écriture : ADMIN.
+//  Miniature stockée via la couche storage (disk ou Blob).
 // ─────────────────────────────────────────────────────────────
-import path from 'node:path';
-import fs from 'node:fs';
 import { prisma } from '../prisma.js';
-import { config } from '../config.js';
 import { parsePrice, cleanStr } from '../utils/parse.js';
-
-const imageDir = path.join(config.uploadDir, 'produits');
+import { saveBuffer, deleteByKey, readBuffer, makeFilename } from '../storage.js';
 
 export async function listProduits(req, res) {
   const produits = await prisma.produit.findMany({ orderBy: { nom: 'asc' } });
   res.json({ produits });
 }
 
+async function storeImage(file) {
+  const filename = makeFilename(file.originalname);
+  return saveBuffer(file.buffer, { subdir: 'produits', filename, contentType: file.mimetype });
+}
+
 export async function createProduit(req, res) {
   const nom = cleanStr(req.body.nom);
-  if (!nom) {
-    if (req.file) fs.unlinkSync(path.join(imageDir, req.file.filename));
-    return res.status(400).json({ error: 'Le nom du produit est obligatoire.' });
-  }
+  if (!nom) return res.status(400).json({ error: 'Le nom du produit est obligatoire.' });
+
   const exists = await prisma.produit.findUnique({ where: { nom } });
-  if (exists) {
-    if (req.file) fs.unlinkSync(path.join(imageDir, req.file.filename));
-    return res.status(409).json({ error: 'Un produit porte déjà ce nom.' });
-  }
+  if (exists) return res.status(409).json({ error: 'Un produit porte déjà ce nom.' });
+
+  let image = null; let imageUrl = null;
+  if (req.file) { const r = await storeImage(req.file); image = r.key; imageUrl = r.url; }
+
   const produit = await prisma.produit.create({
-    data: {
-      nom,
-      prixAchat: parsePrice(req.body.prixAchat),
-      image: req.file ? req.file.filename : null,
-    },
+    data: { nom, prixAchat: parsePrice(req.body.prixAchat), image, imageUrl },
   });
   res.status(201).json({ produit });
 }
@@ -47,12 +43,10 @@ export async function updateProduit(req, res) {
   if (req.body.prixAchat !== undefined) data.prixAchat = parsePrice(req.body.prixAchat);
   if (req.body.actif !== undefined) data.actif = req.body.actif === 'true' || req.body.actif === true;
 
-  // Nouvelle image : on remplace et on supprime l'ancienne.
   if (req.file) {
-    data.image = req.file.filename;
-    if (existing.image) {
-      try { fs.unlinkSync(path.join(imageDir, existing.image)); } catch { /* ignore */ }
-    }
+    const r = await storeImage(req.file);
+    data.image = r.key; data.imageUrl = r.url;
+    if (existing.image) await deleteByKey(existing.image, existing.imageUrl);
   }
 
   try {
@@ -68,9 +62,7 @@ export async function deleteProduit(req, res) {
   const id = Number(req.params.id);
   const existing = await prisma.produit.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: 'Produit introuvable.' });
-  if (existing.image) {
-    try { fs.unlinkSync(path.join(imageDir, existing.image)); } catch { /* ignore */ }
-  }
+  if (existing.image) await deleteByKey(existing.image, existing.imageUrl);
   await prisma.produit.delete({ where: { id } });
   res.json({ ok: true });
 }
@@ -79,7 +71,11 @@ export async function deleteProduit(req, res) {
 export async function produitImage(req, res) {
   const produit = await prisma.produit.findUnique({ where: { id: Number(req.params.id) } });
   if (!produit || !produit.image) return res.status(404).json({ error: 'Image introuvable.' });
-  const abs = path.join(imageDir, produit.image);
-  if (!fs.existsSync(abs)) return res.status(404).json({ error: 'Image absente du disque.' });
-  res.sendFile(abs);
+  try {
+    const buf = await readBuffer({ key: produit.image, url: produit.imageUrl });
+    res.type('image/*');
+    res.send(buf);
+  } catch {
+    res.status(404).json({ error: 'Image indisponible.' });
+  }
 }
