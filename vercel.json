@@ -3,7 +3,10 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "frontend/dist",
   "functions": {
-    "api/index.mjs": { "maxDuration": 30 }
+    "api/index.mjs": {
+      "maxDuration": 30,
+      "includeFiles": "backend/node_modules/.prisma/**"
+    }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },

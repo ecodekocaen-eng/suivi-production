@@ -66,3 +66,8 @@ DATABASE_URL="postgresql://...-pooler.../neondb?sslmode=require" STORAGE_DRIVER=
   automatiquement à l'expédition (comme en local).
 - Pour rester sur un serveur classique (VPS/Docker, SQLite + disque), voir `README.md`
   (la branche `main` reste compatible : `STORAGE_DRIVER=disk`).
+- **Moteur Prisma** : le client Postgres est généré au build avec
+  `binaryTargets = ["native","rhel-openssl-3.0.x"]`, et `vercel.json` force son
+  inclusion dans la fonction (`includeFiles`) — approche officielle Prisma/Vercel.
+- ⚠️ Si vous lancez `npm run vercel-build` **en local** (build Postgres), pensez à
+  régénérer ensuite le client SQLite pour le dev local : `cd backend && npm run prisma:generate`.
