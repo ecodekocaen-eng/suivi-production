@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "suivi",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:preview", "--prefix", "backend"],
+      "port": 4100,
+      "autoPort": false
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────
+#  Render Blueprint — déploiement de l'app (Docker, mono-port).
+#  La base SQLite et les fichiers visuels sont persistés sur un disque.
+#  NB : un disque persistant nécessite un plan payant (Starter).
+#       Sinon, basculer sur PostgreSQL (provider dans schema.prisma).
+# ─────────────────────────────────────────────────────────────
+services:
+  - type: web
+    name: suivi-production
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: JWT_SECRET
+        generateValue: true        # secret généré automatiquement par Render
+      - key: DATABASE_URL
+        value: "file:/data/prod.db" # sur le disque persistant
+      - key: UPLOAD_DIR
+        value: "/data/uploads"      # sur le disque persistant
+      - key: MAX_FILE_SIZE
+        value: "10485760"
+      - key: SECURE_COOKIE
+        value: "true"
+      # Compte admin créé au 1er démarrage si la base est vide :
+      - key: ADMIN_EMAIL
+        sync: false                 # à renseigner dans le dashboard
+      - key: ADMIN_PASSWORD
+        sync: false                 # à renseigner dans le dashboard
+      - key: ADMIN_NOM
+        value: "Administrateur"
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

@@ -1,0 +1,141 @@
+// ─────────────────────────────────────────────────────────────
+//  Schéma Prisma — Suivi de production ECODEKO
+//
+//  DÉVELOPPEMENT  : SQLite (aucune installation requise).
+//  PRODUCTION     : pour PostgreSQL, remplacer provider = "sqlite"
+//                   par provider = "postgresql" ci-dessous, puis
+//                   `npx prisma migrate dev`. DATABASE_URL pointe vers
+//                   le fichier SQLite (dev) ou le serveur Postgres (prod).
+//
+//  NB : Prisma ne supporte pas les `enum` sous SQLite. Les champs
+//  `role` et `statut` sont donc des String validées côté serveur
+//  (voir src/constants.js). Cela garde le code identique dev/prod.
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  nom       String
+  role      String   @default("OPERATEUR") // ADMIN | OPERATEUR
+  actif     Boolean  @default(true)         // compte désactivable par un ADMIN
+  createdAt DateTime @default(now())
+
+  commandesModifiees Commande[] @relation("ModifiePar")
+  logs               Log[]
+}
+
+model Commande {
+  id            Int       @id @default(autoincrement())
+  reference     String    @unique
+  client        String
+  designation   String // visuel / nom de fichier principal
+  quantite      Int       @default(0)
+  statut        String    @default("EN_ATTENTE") // voir STATUTS dans constants.js
+  dateCommande  DateTime?
+  dateLivraison DateTime? // date de sortie parsée
+  dateExpedition DateTime?
+  notes         String?
+
+  // ── Colonnes métier conservées depuis la Google Sheet ──
+  typeMug         String?
+  prixEsat        Float?
+  atelier         String? // LETTRAGE / CONDITIONNEMENT
+  rebut           Int      @default(0)
+  noteTransport   String? // CHRONO, recup alex…
+  aFacturer       String? // dates d'arrêt de facturation
+  dateSortieTexte String? // date de sortie en texte libre (ASAP, URGENT…)
+
+  // ── Suppression automatique des fichiers à l'expédition ──
+  fichiersSupprimes   Boolean   @default(false)
+  fichiersSupprimesAt DateTime?
+
+  // ── Soft delete (réservé ADMIN) ──
+  supprime   Boolean   @default(false)
+  supprimeAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  modifiePar   User? @relation("ModifiePar", fields: [modifieParId], references: [id])
+  modifieParId Int?
+
+  fichiers Fichier[]
+  logs     Log[]
+  lignes   LigneCommande[]
+
+  @@index([statut])
+  @@index([client])
+  @@index([supprime])
+}
+
+// Lignes de détail d'une commande (un visuel / type de mug par ligne).
+model LigneCommande {
+  id          Int      @id @default(autoincrement())
+  commande    Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  commandeId  Int
+  typeMug     String?
+  visuel      String? // nom du visuel / fichier
+  quantite    Int      @default(0)
+  commentaire String?
+  lien        String? // lien de transfert (WeTransfer / Smash) pour gros fichiers
+  ordre       Int      @default(0)
+
+  fichiers Fichier[]
+
+  @@index([commandeId])
+}
+
+model Fichier {
+  id          Int      @id @default(autoincrement())
+  nom         String // nom d'origine
+  nomStockage String // nom du fichier sur le disque
+  chemin      String // chemin relatif : commande_<id>/<nomStockage>
+  taille      Int
+  type        String // type MIME
+  createdAt   DateTime @default(now())
+
+  commande   Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  commandeId Int
+
+  // Rattachement optionnel à une ligne précise (sinon visuel "commande").
+  ligne   LigneCommande? @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+  ligneId Int?
+
+  @@index([commandeId])
+  @@index([ligneId])
+}
+
+// Catalogue des produits (types de mug) géré par l'administrateur.
+model Produit {
+  id        Int      @id @default(autoincrement())
+  nom       String   @unique
+  prixAchat Float? // prix d'achat unitaire
+  image     String? // nom du fichier miniature (uploads/produits/)
+  actif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Log {
+  id        Int      @id @default(autoincrement())
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  user   User? @relation(fields: [userId], references: [id])
+  userId Int?
+
+  commande   Commande? @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  commandeId Int?
+
+  @@index([commandeId])
+}

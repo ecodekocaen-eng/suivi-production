@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────
+#  Déploiement Docker — par défaut en SQLite (simple, volume persistant).
+#  Pour PostgreSQL : voir le bloc commenté "db" en bas + README.
+# ─────────────────────────────────────────────────────────────
+services:
+  app:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      # SQLite (défaut). Le fichier est dans le volume db_data.
+      DATABASE_URL: "file:./prod.db"
+      # ⚠️ Générez un vrai secret : openssl rand -hex 48
+      JWT_SECRET: "${JWT_SECRET:-CHANGEZ_MOI_secret_de_dev}"
+      JWT_EXPIRES_IN: "8h"
+      # Mono-port : le backend sert le frontend, l'origine est la même.
+      CORS_ORIGIN: "http://localhost:4000"
+      UPLOAD_DIR: "./uploads"
+      MAX_FILE_SIZE: "10485760"
+      # Mettre "true" si servi derrière HTTPS.
+      SECURE_COOKIE: "false"
+    volumes:
+      - db_data:/app/backend/prisma      # base SQLite persistante
+      - uploads_data:/app/backend/uploads # fichiers visuels persistants
+    restart: unless-stopped
+
+  # ── Option PostgreSQL ───────────────────────────────────────
+  # 1) Dans backend/prisma/schema.prisma : provider = "postgresql"
+  # 2) Décommenter ce service et la dépendance ci-dessous
+  # 3) DATABASE_URL ci-dessus :
+  #      postgresql://suivi:suivi@db:5432/suivi
+  # 4) Ajouter sous "app:"  ->  depends_on: [db]
+  #
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: suivi
+  #     POSTGRES_PASSWORD: suivi
+  #     POSTGRES_DB: suivi
+  #   volumes:
+  #     - pg_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+volumes:
+  db_data:
+  uploads_data:
+  # pg_data:
