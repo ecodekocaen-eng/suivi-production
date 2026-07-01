@@ -4,8 +4,9 @@
 //  La base ne contient que les métadonnées (clé, url, taille…).
 // ─────────────────────────────────────────────────────────────
 import { prisma } from '../prisma.js';
+import { config } from '../config.js';
 import { addLog } from './log.service.js';
-import { LOG_ACTIONS } from '../constants.js';
+import { LOG_ACTIONS, STATUT_EXPEDIEE } from '../constants.js';
 import { saveBuffer, deleteByKey, deletePrefix, makeFilename } from '../storage.js';
 
 // Enregistre un fichier (buffer multer) : stockage + métadonnées + log.
@@ -85,10 +86,28 @@ export async function purgeFichiers(commandeId, userId) {
   await addLog({
     action: LOG_ACTIONS.FICHIERS_SUPPRIMES,
     detail: count > 0
-      ? `${count} fichier(s) supprimé(s) à l'expédition le ${dateStr}`
-      : `Passage à Expédiée le ${dateStr} : aucun fichier à supprimer`,
+      ? `${count} fichier(s) supprimé(s) automatiquement le ${dateStr} (rétention ${config.retentionDays} j après expédition)`
+      : `Nettoyage le ${dateStr} : aucun fichier à supprimer`,
     userId,
     commandeId,
   });
   return count;
+}
+
+// ── Nettoyage périodique : purge les visuels des commandes expédiées
+//    depuis plus de RETENTION_DAYS jours (appelé par le cron).
+export async function purgeExpiredFichiers() {
+  const cutoff = new Date(Date.now() - config.retentionDays * 86400000);
+  const commandes = await prisma.commande.findMany({
+    where: {
+      statut: STATUT_EXPEDIEE,
+      fichiersSupprimes: false,
+      dateExpedition: { not: null, lte: cutoff },
+    },
+    select: { id: true },
+  });
+
+  let fichiers = 0;
+  for (const c of commandes) fichiers += await purgeFichiers(c.id, null);
+  return { commandes: commandes.length, fichiers, retentionDays: config.retentionDays };
 }

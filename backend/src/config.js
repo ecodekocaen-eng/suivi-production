@@ -28,5 +28,8 @@ export const config = {
   uploadDir: resolveFromRoot(process.env.UPLOAD_DIR || './uploads'),
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE || String(10 * 1024 * 1024), 10),
 
+  // Rétention des visuels après expédition (jours) avant suppression auto.
+  retentionDays: parseInt(process.env.RETENTION_DAYS || '60', 10),
+
   secureCookie: process.env.SECURE_COOKIE === 'true',
 };

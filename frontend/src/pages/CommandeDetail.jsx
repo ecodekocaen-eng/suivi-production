@@ -90,12 +90,6 @@ export default function CommandeDetail() {
 
   const appliquerStatut = async () => {
     if (statut === commande.statut) return;
-    if (statut === 'Expédié') {
-      const ok = window.confirm(
-        'Passer à « Expédiée » supprimera définitivement tous les visuels du serveur.\n\nConfirmer ?'
-      );
-      if (!ok) { setStatut(commande.statut); return; }
-    }
     await api.patch(`/commandes/${id}/statut`, { statut });
     load();
   };
@@ -138,7 +132,7 @@ export default function CommandeDetail() {
         <button className="btn btn-primary btn-sm" onClick={appliquerStatut} disabled={statut === commande.statut}>
           Appliquer
         </button>
-        <span className="hint">⚠️ « Expédiée » supprime les visuels du serveur.</span>
+        <span className="hint">🗓️ Les visuels sont conservés 60 jours après l'expédition, puis supprimés automatiquement.</span>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -206,7 +200,13 @@ export default function CommandeDetail() {
 
         {commande.fichiersSupprimes && (
           <div className="alert alert-info">
-            🗑️ Les visuels ont été automatiquement supprimés le {fmtDateTime(commande.fichiersSupprimesAt)} lors du passage en statut Expédiée.
+            🗑️ Les visuels ont été supprimés automatiquement le {fmtDateTime(commande.fichiersSupprimesAt)} (rétention de 60 jours après l'expédition).
+          </div>
+        )}
+
+        {!commande.fichiersSupprimes && expediee && commande.dateExpedition && (
+          <div className="alert alert-info">
+            🗓️ Commande expédiée : les visuels sont <strong>conservés jusqu'au {fmtDate(new Date(new Date(commande.dateExpedition).getTime() + 60 * 86400000))}</strong> (SAV), puis supprimés automatiquement.
           </div>
         )}
 

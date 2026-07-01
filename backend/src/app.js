@@ -22,6 +22,7 @@ import fichiersRoutes from './routes/fichiers.routes.js';
 import statsRoutes from './routes/stats.routes.js';
 import clientsRoutes from './routes/clients.routes.js';
 import produitsRoutes from './routes/produits.routes.js';
+import cronRoutes from './routes/cron.routes.js';
 
 export function createApp() {
   const app = express();
@@ -47,6 +48,7 @@ export function createApp() {
   app.use('/api/stats', statsRoutes);
   app.use('/api/clients', clientsRoutes);
   app.use('/api/produits', produitsRoutes);
+  app.use('/api/cron', cronRoutes);
   // Sous-routes fichiers (déclarées avant pour le préfixe plus spécifique).
   app.use('/api/commandes/:id/fichiers', fichiersRoutes);
   app.use('/api/commandes', commandesRoutes);

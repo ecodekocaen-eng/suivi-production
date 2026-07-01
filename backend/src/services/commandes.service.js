@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from '../prisma.js';
 import { addLog } from './log.service.js';
-import { purgeFichiers, deleteFichiersForLigne } from './fichiers.service.js';
+import { deleteFichiersForLigne } from './fichiers.service.js';
 import { LOG_ACTIONS, STATUT_EXPEDIEE, STATUT_LABELS } from '../constants.js';
 
 // Colonnes triables autorisées (liste blanche).
@@ -218,10 +218,8 @@ export async function updateCommande(id, data, userId, lignes = null) {
       userId,
       commandeId: commande.id,
     });
-    // Purge automatique des fichiers au passage à EXPEDIEE.
-    if (nouveauStatut === STATUT_EXPEDIEE && existing.statut !== STATUT_EXPEDIEE) {
-      await purgeFichiers(commande.id, userId);
-    }
+    // Les visuels ne sont PLUS supprimés à l'expédition : ils sont conservés
+    // (rétention) puis purgés par le nettoyage automatique (voir purgeExpiredFichiers).
   } else {
     await addLog({
       action: LOG_ACTIONS.COMMANDE_MODIFIEE,

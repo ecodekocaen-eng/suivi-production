@@ -47,14 +47,8 @@ export default function Dashboard() {
     page: 1,
   }));
 
-  // Changement de statut inline (avec confirmation si Expédiée).
+  // Changement de statut inline.
   const onStatutChange = async (commande, statut) => {
-    if (statut === 'Expédié' && commande.statut !== 'Expédié') {
-      const ok = window.confirm(
-        'Passer cette commande à « Expédiée » supprimera définitivement tous ses visuels du serveur.\n\nConfirmer ?'
-      );
-      if (!ok) return;
-    }
     await api.patch(`/commandes/${commande.id}/statut`, { statut });
     load();
   };
