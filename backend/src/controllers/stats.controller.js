@@ -25,7 +25,7 @@ export async function stats(req, res) {
     where: { supprime: false },
     select: {
       dateCommande: true, dateExpedition: true, dateLivraison: true, quantite: true,
-      statut: true, client: true, typeMug: true, prixEsat: true, rebut: true,
+      statut: true, client: true, typeMug: true, prixEsat: true, prixVente: true, rebut: true,
       atelier: true, designation: true,
     },
   });
