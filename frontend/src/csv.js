@@ -24,8 +24,10 @@ export function exportStatsCsv(data, periodeLabel) {
   L.push(row(['Mugs produits', data.kpis.quantiteTotale]));
   L.push(row(['Clients', data.kpis.nbClients]));
   L.push(row(['Rebut total', data.kpis.rebutTotal]));
-  L.push(row(['CA ESAT estimé (€)', data.kpis.caEstime]));
+  L.push(row(['Taux de rebut (%)', data.kpis.tauxRebut]));
+  L.push(row(["Coût d'achat ESAT (€)", data.kpis.coutAchat]));
   L.push(row(['Délai moyen production (j)', data.kpis.delaiMoyenJours ?? '']));
+  L.push(row(['À produire (mugs)', data.kpis.aProduire]));
   L.push('');
 
   L.push(row(['PAR STATUT', 'Commandes']));
@@ -46,6 +48,17 @@ export function exportStatsCsv(data, periodeLabel) {
 
   L.push(row(['PAR ATELIER', 'Commandes']));
   for (const a of data.ateliers) L.push(row([a.atelier, a.count]));
+  L.push('');
+
+  L.push(row(['CHARGE DE PRODUCTION (à produire)', 'Commandes', 'Mugs']));
+  for (const c of (data.charge || [])) L.push(row([STATUT_LABELS[c.statut] || c.statut, c.commandes, c.quantite]));
+  L.push('');
+
+  L.push(row(['RETARDS', 'Visuel', 'Mugs', 'Statut', 'Date sortie', 'Jours retard']));
+  for (const r of (data.retards || [])) {
+    L.push(row([r.client, r.designation, r.quantite, STATUT_LABELS[r.statut] || r.statut,
+      r.dateLivraison ? new Date(r.dateLivraison).toLocaleDateString('fr-FR') : '', r.joursRetard]));
+  }
 
   const csv = '﻿' + L.join('\r\n'); // BOM + CRLF
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

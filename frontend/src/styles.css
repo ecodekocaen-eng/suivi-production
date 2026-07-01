@@ -203,6 +203,23 @@ label.full { margin-top: 1rem; }
 
 @media (max-width: 800px) { .stats-grid { grid-template-columns: 1fr; } }
 
+/* KPI delta + courbe + retards */
+.kpi-delta { font-size: 12px; margin-top: 2px; }
+.kpi-delta.up { color: #199e70; }
+.kpi-delta.down { color: #e34948; }
+.chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); align-items: center; }
+.chart-legend span { display: flex; align-items: center; gap: 5px; }
+.chart-legend .dot { width: 14px; height: 3px; border-radius: 2px; background: #2a78d6; }
+.chart-legend .dot.dash { background: none; border-top: 2px dashed #888780; height: 0; }
+.linechart { width: 100%; height: auto; display: block; }
+.lc-grid { stroke: var(--border); stroke-width: 1; }
+.lc-tick { fill: var(--muted); font-size: 11px; }
+.retards { list-style: none; margin: 0; padding: 0; }
+.retards li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: .5rem 0; border-bottom: 1px solid var(--border); }
+.retards li:last-child { border-bottom: 0; }
+.retard-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.retard-jours { color: #a32d2d; font-size: .8rem; }
+
 /* Éditeur de lignes */
 .lignes-editor { margin: 1.25rem 0; border-top: 1px solid var(--border); padding-top: 1rem; }
 .lignes-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .6rem; }

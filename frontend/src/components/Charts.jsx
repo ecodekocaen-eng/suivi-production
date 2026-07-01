@@ -22,6 +22,40 @@ export function BarChart({ data, valueKey, labelKey, height = 180 }) {
   );
 }
 
+// Courbe (une ou deux séries) — ex : production mensuelle + comparaison N-1.
+export function LineChart({ labels, series, height = 210 }) {
+  const W = 640; const padL = 40; const padR = 10; const padT = 10; const padB = 26;
+  const n = labels.length || 1;
+  const max = Math.max(1, ...series.flatMap((s) => s.data));
+  const x = (i) => padL + (i * (W - padL - padR)) / (n - 1 || 1);
+  const y = (v) => padT + (1 - v / max) * (height - padT - padB);
+  const ticks = [0, 0.5, 1].map((t) => Math.round(max * t));
+
+  return (
+    <svg className="linechart" viewBox={`0 0 ${W} ${height}`} role="img"
+         aria-label={`Courbe : ${series.map((s) => s.label).join(' et ')}`}>
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className="lc-grid" />
+          <text x={padL - 6} y={y(t) + 3} textAnchor="end" className="lc-tick">
+            {t >= 1000 ? `${Math.round(t / 1000)}k` : t}
+          </text>
+        </g>
+      ))}
+      {series.map((s, si) => (
+        <polyline key={si} fill="none" stroke={s.color} strokeWidth="2"
+                  strokeDasharray={s.dash ? '5 4' : 'none'} strokeLinejoin="round" strokeLinecap="round"
+                  points={s.data.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
+      ))}
+      {labels.map((l, i) => (
+        (i % 2 === 0 || n <= 12) && (
+          <text key={i} x={x(i)} y={height - 8} textAnchor="middle" className="lc-tick">{l}</text>
+        )
+      ))}
+    </svg>
+  );
+}
+
 // Barres horizontales avec libellé + valeur (ex : top clients, types de mug).
 export function HBars({ data, labelKey, valueKey, max, format = fmtNumber }) {
   const m = max ?? Math.max(1, ...data.map((d) => d[valueKey]));

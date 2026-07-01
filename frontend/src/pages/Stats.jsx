@@ -1,37 +1,43 @@
 // ─────────────────────────────────────────────────────────────
-//  Onglet Statistiques : KPIs + graphiques.
+//  Onglet Statistiques : KPIs (avec tendances), production 12 mois
+//  comparée à N-1, charge de production, avancement, top clients, retards.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { STATUT_LABELS } from '../constants.js';
-import { fmtNumber, fmtMois } from '../format.js';
-import { BarChart, HBars, Donut } from '../components/Charts.jsx';
+import { fmtNumber, fmtMois, fmtDate } from '../format.js';
+import { LineChart, HBars, Donut } from '../components/Charts.jsx';
 import { exportStatsCsv } from '../csv.js';
+import StatutBadge from '../components/StatutBadge.jsx';
 
 const PERIODES = { tout: 'Tout l’historique', '12m': '12 derniers mois', annee: 'Cette année' };
 
-// Couleurs des statuts (cohérentes avec les badges du tableau).
 const STATUT_COLORS = {
-  'En attente': '#94a3b8',
-  'Impression OK': '#6366f1',
-  'En cours de prod': '#3b82f6',
-  'Terminé': '#22c55e',
+  'En attente': '#888780',
+  'Impression OK': '#eda100',
+  'En cours de prod': '#2a78d6',
+  'Terminé': '#199e70',
   'Expédié': '#15803d',
 };
 
-function Kpi({ label, value, suffix }) {
+function Kpi({ label, value, suffix, delta }) {
   return (
     <div className="kpi-card">
       <span className="kpi-value">{value}{suffix && <em className="kpi-suffix"> {suffix}</em>}</span>
       <span className="kpi-label">{label}</span>
+      {delta != null && (
+        <span className={`kpi-delta ${delta >= 0 ? 'up' : 'down'}`}>
+          {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% vs préc.
+        </span>
+      )}
     </div>
   );
 }
 
 export default function Stats() {
   const [data, setData] = useState(null);
-  const [metric, setMetric] = useState('quantite'); // 'quantite' | 'commandes'
-  const [periode, setPeriode] = useState('tout');    // tout | 12m | annee
+  const [metric, setMetric] = useState('quantite');
+  const [periode, setPeriode] = useState('tout');
 
   useEffect(() => {
     setData(null);
@@ -40,14 +46,22 @@ export default function Stats() {
 
   if (!data) return <p className="muted">Chargement des statistiques…</p>;
 
-  const { kpis, parStatut, parMois, topClients, typesMug, ateliers } = data;
+  const { kpis, deltas, parStatut, parMois, charge, topClients, typesMug, ateliers, retards } = data;
 
-  // 12 derniers mois pour l'histogramme.
-  const mois12 = parMois.slice(-12).map((m) => ({ ...m, label: fmtMois(m.mois) }));
+  // Production 12 mois + comparaison année précédente
+  const mois12 = parMois.slice(-12);
+  const lookup = Object.fromEntries(parMois.map((m) => [m.mois, m]));
+  const shiftYear = (ym) => { const [y, m] = ym.split('-'); return `${Number(y) - 1}-${m}`; };
+  const labels = mois12.map((m) => fmtMois(m.mois));
+  const cur = mois12.map((m) => m[metric]);
+  const prev = mois12.map((m) => lookup[shiftYear(m.mois)]?.[metric] ?? 0);
+  const hasPrev = prev.some((v) => v > 0);
 
   const donutSegments = Object.entries(parStatut)
-    .filter(([, v]) => v > 0)
+    .filter(([s, v]) => s !== 'Expédié' && v > 0)
     .map(([s, v]) => ({ label: STATUT_LABELS[s] || s, value: v, color: STATUT_COLORS[s] }));
+
+  const total = kpis.quantiteTotale || 1;
 
   return (
     <>
@@ -65,48 +79,94 @@ export default function Stats() {
 
       {/* KPIs */}
       <div className="kpis">
-        <Kpi label="Commandes" value={fmtNumber(kpis.nbCommandes)} />
-        <Kpi label="Mugs produits" value={fmtNumber(kpis.quantiteTotale)} />
-        <Kpi label="Clients" value={fmtNumber(kpis.nbClients)} />
-        <Kpi label="Rebut total" value={fmtNumber(kpis.rebutTotal)} />
-        <Kpi label="CA ESAT estimé" value={fmtNumber(kpis.caEstime)} suffix="€" />
+        <Kpi label="Mugs produits" value={fmtNumber(kpis.quantiteTotale)} delta={deltas?.mugs} />
+        <Kpi label="Commandes" value={fmtNumber(kpis.nbCommandes)} delta={deltas?.commandes} />
+        <Kpi label="Coût d'achat ESAT" value={fmtNumber(kpis.coutAchat)} suffix="€" delta={deltas?.cout} />
+        <Kpi label="Taux de rebut" value={kpis.tauxRebut} suffix="%" />
         <Kpi label="Délai moyen prod." value={kpis.delaiMoyenJours ?? '—'} suffix={kpis.delaiMoyenJours != null ? 'j' : ''} />
+        <Kpi label="À produire" value={fmtNumber(kpis.aProduire)} suffix={`mugs · ${kpis.aProduireCommandes} cmd`} />
+        <Kpi label="Clients" value={fmtNumber(kpis.nbClients)} />
       </div>
 
-      <div className="stats-grid">
-        {/* Production par mois */}
-        <div className="card span2">
-          <div className="card-head">
-            <h2>Production sur 12 mois</h2>
+      {/* Production 12 mois + N-1 */}
+      <div className="card span2">
+        <div className="card-head">
+          <h2>Production sur 12 mois</h2>
+          <div className="stats-toolbar">
+            <div className="chart-legend">
+              <span><span className="dot" style={{ background: '#2a78d6' }} />Cette année</span>
+              {hasPrev && <span><span className="dot dash" />Année préc.</span>}
+            </div>
             <div className="toggle">
               <button className={`btn btn-xs ${metric === 'quantite' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMetric('quantite')}>Mugs</button>
               <button className={`btn btn-xs ${metric === 'commandes' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMetric('commandes')}>Commandes</button>
             </div>
           </div>
-          {mois12.length === 0
-            ? <p className="muted">Pas assez de données.</p>
-            : <BarChart data={mois12} valueKey={metric} labelKey="label" />}
         </div>
+        {mois12.length === 0 ? <p className="muted">Pas assez de données.</p> : (
+          <LineChart
+            labels={labels}
+            series={[
+              { label: 'Cette année', color: '#2a78d6', data: cur },
+              ...(hasPrev ? [{ label: 'Année préc.', color: '#888780', dash: true, data: prev }] : []),
+            ]}
+          />
+        )}
+      </div>
 
-        {/* Répartition par statut */}
+      <div className="stats-grid">
+        {/* Charge de production */}
         <div className="card">
-          <h2>Répartition par statut</h2>
-          <Donut segments={donutSegments} />
+          <div className="card-head">
+            <h2>Charge de production</h2>
+            <span className="muted">{fmtNumber(kpis.aProduire)} mugs à produire</span>
+          </div>
+          <HBars data={charge} labelKey="statut" valueKey="quantite" />
         </div>
 
-        {/* Top clients */}
+        {/* Avancement (hors expédiées) */}
         <div className="card">
-          <h2>Top 10 clients (mugs)</h2>
-          <HBars data={topClients} labelKey="client" valueKey="quantite" />
+          <h2>Avancement (hors expédiées)</h2>
+          {donutSegments.length === 0
+            ? <p className="muted">Aucune commande en cours.</p>
+            : <Donut segments={donutSegments} />}
         </div>
 
-        {/* Types de mug */}
+        {/* Top clients en % */}
+        <div className="card">
+          <h2>Top clients (part du volume)</h2>
+          <HBars data={topClients} labelKey="client" valueKey="quantite" max={total}
+                 format={(v) => `${Math.round((v / total) * 100)}%`} />
+        </div>
+
+        {/* Retards */}
+        <div className="card">
+          <h2>⚠️ Retards à surveiller</h2>
+          {retards.length === 0 ? <p className="muted">Aucun retard. 👍</p> : (
+            <ul className="retards">
+              {retards.map((r, i) => (
+                <li key={i}>
+                  <div>
+                    <div className="strong">{r.client} · {r.designation}</div>
+                    <div className="muted small">{fmtNumber(r.quantite)} mugs · sortie {fmtDate(r.dateLivraison)}</div>
+                  </div>
+                  <div className="retard-right">
+                    <StatutBadge statut={r.statut} />
+                    <span className="retard-jours">{r.joursRetard} j de retard</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Par type de mug */}
         <div className="card">
           <h2>Par type de mug (mugs)</h2>
           <HBars data={typesMug} labelKey="type" valueKey="quantite" />
         </div>
 
-        {/* Ateliers */}
+        {/* Par atelier */}
         <div className="card">
           <h2>Par atelier (commandes)</h2>
           <HBars data={ateliers} labelKey="atelier" valueKey="count" />
