@@ -17,9 +17,6 @@ export function errorHandler(err, req, res, next) {
     return res.status(400).json({ error: 'Fichier trop volumineux.' });
   }
   const status = err.status || 500;
-  res.status(status).json({
-    error: config.isProduction && status === 500
-      ? 'Une erreur interne est survenue.'
-      : err.message,
-  });
+  // TEMP DEBUG
+  res.status(status).json({ error: err.message, hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN });
 }
