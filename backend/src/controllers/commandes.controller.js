@@ -19,7 +19,7 @@ function buildData(body, { partial = false } = {}) {
   if (!partial || body.designation !== undefined) data.designation = cleanStr(body.designation) || '';
   setIf('quantite', parseIntSafe(body.quantite, 0));
   if (body.statut !== undefined && STATUTS.includes(body.statut)) data.statut = body.statut;
-  else if (!partial) data.statut = 'EN_ATTENTE';
+  else if (!partial) data.statut = 'En attente';
 
   if (!partial || body.dateCommande !== undefined) data.dateCommande = body.dateCommande ? new Date(body.dateCommande) : null;
   if (!partial || body.dateLivraison !== undefined) data.dateLivraison = body.dateLivraison ? new Date(body.dateLivraison) : null;

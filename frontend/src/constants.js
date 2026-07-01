@@ -1,20 +1,21 @@
 // ─────────────────────────────────────────────────────────────
 //  Constantes UI (statuts, libellés, couleurs) — alignées sur le backend.
 // ─────────────────────────────────────────────────────────────
+// Statuts fidèles à la Google Sheet (valeur = libellé).
 export const STATUTS = [
-  'EN_ATTENTE',
-  'EN_PRODUCTION',
-  'CONTROLE_QUALITE',
-  'PRET_A_EXPEDIER',
-  'EXPEDIEE',
+  'En attente',
+  'Impression OK',
+  'En cours de prod',
+  'Terminé',
+  'Expédié',
 ];
 
 export const STATUT_LABELS = {
-  EN_ATTENTE: 'En attente',
-  EN_PRODUCTION: 'En production',
-  CONTROLE_QUALITE: 'Contrôle qualité',
-  PRET_A_EXPEDIER: 'Prêt à expédier',
-  EXPEDIEE: 'Expédiée',
+  'En attente': 'En attente',
+  'Impression OK': 'Impression OK',
+  'En cours de prod': 'En cours de prod',
+  'Terminé': 'Terminé',
+  'Expédié': 'Expédié',
 };
 
 // Types de mug courants (suggestions pour l'autocomplétion des lignes).
@@ -30,9 +31,9 @@ export const TYPES_MUG = [
 
 // Classe CSS associée à chaque statut (couleurs définies dans styles.css).
 export const STATUT_CLASS = {
-  EN_ATTENTE: 'st-attente',
-  EN_PRODUCTION: 'st-production',
-  CONTROLE_QUALITE: 'st-controle',
-  PRET_A_EXPEDIER: 'st-pret',
-  EXPEDIEE: 'st-expediee',
+  'En attente': 'st-attente',
+  'Impression OK': 'st-impression',
+  'En cours de prod': 'st-production',
+  'Terminé': 'st-termine',
+  'Expédié': 'st-expediee',
 };

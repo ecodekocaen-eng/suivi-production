@@ -12,7 +12,7 @@ import { addJoursOuvres } from '../format.js';
 import LignesEditor, { ligneVide } from './LignesEditor.jsx';
 
 const empty = {
-  reference: '', client: '', statut: 'EN_ATTENTE',
+  reference: '', client: '', statut: 'En attente',
   dateCommande: '', dateSortieTexte: '', prixEsat: '', atelier: '', notes: '',
 };
 

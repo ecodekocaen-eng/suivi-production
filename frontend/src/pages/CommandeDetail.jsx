@@ -50,7 +50,7 @@ export default function CommandeDetail() {
     if (f.ligneId) (filesByLigne[f.ligneId] ||= []).push(f);
     else filesGeneral.push(f);
   }
-  const expediee = commande.statut === 'EXPEDIEE';
+  const expediee = commande.statut === 'Expédié';
 
   const startEdit = () => {
     setForm({
@@ -90,7 +90,7 @@ export default function CommandeDetail() {
 
   const appliquerStatut = async () => {
     if (statut === commande.statut) return;
-    if (statut === 'EXPEDIEE') {
+    if (statut === 'Expédié') {
       const ok = window.confirm(
         'Passer à « Expédiée » supprimera définitivement tous les visuels du serveur.\n\nConfirmer ?'
       );

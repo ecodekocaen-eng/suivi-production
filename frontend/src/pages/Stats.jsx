@@ -12,11 +12,11 @@ const PERIODES = { tout: 'Tout l’historique', '12m': '12 derniers mois', annee
 
 // Couleurs des statuts (cohérentes avec les badges du tableau).
 const STATUT_COLORS = {
-  EN_ATTENTE: '#94a3b8',
-  EN_PRODUCTION: '#3b82f6',
-  CONTROLE_QUALITE: '#f97316',
-  PRET_A_EXPEDIER: '#22c55e',
-  EXPEDIEE: '#15803d',
+  'En attente': '#94a3b8',
+  'Impression OK': '#6366f1',
+  'En cours de prod': '#3b82f6',
+  'Terminé': '#22c55e',
+  'Expédié': '#15803d',
 };
 
 function Kpi({ label, value, suffix }) {

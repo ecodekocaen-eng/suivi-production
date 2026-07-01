@@ -3,25 +3,27 @@
 // ─────────────────────────────────────────────────────────────
 
 // Statuts de commande, dans l'ordre du workflow.
+// Statuts fidèles à la Google Sheet (valeurs = libellés affichés).
 export const STATUTS = [
-  'EN_ATTENTE',
-  'EN_PRODUCTION',
-  'CONTROLE_QUALITE',
-  'PRET_A_EXPEDIER',
-  'EXPEDIEE',
+  'En attente',
+  'Impression OK',
+  'En cours de prod',
+  'Terminé',
+  'Expédié',
 ];
 
 // Libellés lisibles (utilisés aussi par le frontend via /api/meta).
+// Les valeurs sont déjà lisibles : libellé = valeur.
 export const STATUT_LABELS = {
-  EN_ATTENTE: 'En attente',
-  EN_PRODUCTION: 'En production',
-  CONTROLE_QUALITE: 'Contrôle qualité',
-  PRET_A_EXPEDIER: 'Prêt à expédier',
-  EXPEDIEE: 'Expédiée',
+  'En attente': 'En attente',
+  'Impression OK': 'Impression OK',
+  'En cours de prod': 'En cours de prod',
+  'Terminé': 'Terminé',
+  'Expédié': 'Expédié',
 };
 
 // Statut qui déclenche la suppression automatique des fichiers.
-export const STATUT_EXPEDIEE = 'EXPEDIEE';
+export const STATUT_EXPEDIEE = 'Expédié';
 
 export const ROLES = ['ADMIN', 'OPERATEUR'];
 

@@ -30,12 +30,12 @@ if (!csvPath || !fs.existsSync(csvPath)) {
 // ── Mapping du statut de la feuille → statut de l'application ──
 function mapStatut(raw) {
   const s = (raw || '').trim().toLowerCase();
-  if (s === '') return 'EN_ATTENTE';
-  if (s.includes('impression')) return 'EN_PRODUCTION';
-  if (s.includes('cours de prod') || s.includes('en cours')) return 'EN_PRODUCTION';
-  if (s.startsWith('termin')) return 'PRET_A_EXPEDIER';
-  if (s.startsWith('exp')) return 'EXPEDIEE';
-  return 'EN_ATTENTE';
+  if (s === '') return 'En attente';
+  if (s.includes('impression')) return 'Impression OK';
+  if (s.includes('cours de prod') || s.includes('en cours')) return 'En cours de prod';
+  if (s.startsWith('termin')) return 'Terminé';
+  if (s.startsWith('exp')) return 'Expédié';
+  return 'En attente';
 }
 
 // ── Scinde la colonne REBUS : nombre OU note de transport ──
@@ -102,8 +102,8 @@ for (let i = 0; i < dataRows.length; i++) {
         aFacturer: cleanStr(row[11]),
         dateSortieTexte,
         notes: cleanStr(row[10]),
-        fichiersSupprimes: statut === 'EXPEDIEE',
-        fichiersSupprimesAt: statut === 'EXPEDIEE' ? parseFrDate(row[0]) : null,
+        fichiersSupprimes: statut === 'Expédié',
+        fichiersSupprimesAt: statut === 'Expédié' ? parseFrDate(row[0]) : null,
       },
     });
     imported++;

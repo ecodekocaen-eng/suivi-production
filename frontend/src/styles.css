@@ -83,13 +83,17 @@ table.orders tr:hover td { background: #f9fbff; }
 .badge, .status-select { border-radius: 999px; padding: .2rem .6rem; font-size: .8rem; font-weight: 600; border: 1px solid transparent; }
 .status-select { border-radius: 8px; cursor: pointer; }
 .st-attente    { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.st-impression { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
 .st-production { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+.st-termine    { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
 .st-controle   { background: #ffedd5; color: #9a3412; border-color: #fed7aa; }
 .st-pret       { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
 .st-expediee   { background: #bbf7d0; color: #14532d; border-color: #86efac; }
 .st-deleted    { background: #fee2e2; color: #991b1b; }
 .stat-card.st-attente { border-left-color: #94a3b8; }
+.stat-card.st-impression { border-left-color: #6366f1; }
 .stat-card.st-production { border-left-color: #3b82f6; }
+.stat-card.st-termine { border-left-color: #22c55e; }
 .stat-card.st-controle { border-left-color: #f97316; }
 .stat-card.st-pret { border-left-color: #22c55e; }
 .stat-card.st-expediee { border-left-color: #15803d; }
