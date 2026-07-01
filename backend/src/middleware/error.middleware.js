@@ -17,6 +17,9 @@ export function errorHandler(err, req, res, next) {
     return res.status(400).json({ error: 'Fichier trop volumineux.' });
   }
   const status = err.status || 500;
-  // TEMP DEBUG : on expose le détail pour diagnostiquer l'upload en prod.
-  res.status(status).json({ error: err.message, code: err.code || null });
+  res.status(status).json({
+    error: config.isProduction && status === 500
+      ? 'Une erreur interne est survenue.'
+      : err.message,
+  });
 }

@@ -60,7 +60,7 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
           : (compact
               ? <span>📤 Ajouter des visuels à cette ligne</span>
               : <span>📤 Glissez-déposez vos visuels ici, ou cliquez pour parcourir<br />
-                  <small className="muted">JPG, PNG, GIF, WEBP, PDF — 10 Mo max par fichier</small></span>)}
+                  <small className="muted">JPG, PNG, GIF, WEBP, PDF — gros fichiers : utilisez le lien WeTransfer/Smash</small></span>)}
       </div>
       {busy && (
         <div className="progress"><div className="progress-bar" style={{ width: `${progress}%` }} /></div>
