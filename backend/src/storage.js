@@ -35,7 +35,8 @@ export async function saveBuffer(buffer, { subdir, filename, contentType }) {
   const key = subdir ? `${subdir}/${filename}` : filename;
   if (STORAGE_DRIVER === 'blob') {
     const { put } = await import('@vercel/blob');
-    const res = await put(key, buffer, { access: 'public', contentType, addRandomSuffix: false });
+    // Accès privé : les visuels ne sont pas publics, ils sont servis via l'API authentifiée.
+    const res = await put(key, buffer, { access: 'private', contentType, addRandomSuffix: false });
     return { key, url: res.url };
   }
   const abs = absPath(key);
@@ -69,12 +70,14 @@ export async function deletePrefix(subdir) {
   catch (e) { console.error('Disk delPrefix:', e.message); }
 }
 
-// Récupère le contenu d'un fichier en buffer (pour le zip).
+// Récupère le contenu d'un fichier en buffer (aperçu, download, zip).
 export async function readBuffer({ key, url }) {
   if (STORAGE_DRIVER === 'blob') {
-    const res = await fetch(url || key);
-    if (!res.ok) throw new Error(`Lecture Blob échouée (${res.status})`);
-    return Buffer.from(await res.arrayBuffer());
+    const { get } = await import('@vercel/blob');
+    // Store privé : on télécharge via le SDK (authentifié), pas par l'URL publique.
+    const res = await get(key, { access: 'private' });
+    if (!res || res.statusCode !== 200 || !res.stream) throw new Error('Blob introuvable');
+    return Buffer.from(await new Response(res.stream).arrayBuffer());
   }
   return fs.promises.readFile(absPath(key));
 }
