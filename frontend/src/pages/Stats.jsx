@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { STATUT_LABELS } from '../constants.js';
 import { fmtNumber, fmtMois, fmtDate } from '../format.js';
 import { LineChart, HBars, Donut } from '../components/Charts.jsx';
@@ -35,6 +36,8 @@ function Kpi({ label, value, suffix, delta }) {
 }
 
 export default function Stats() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [data, setData] = useState(null);
   const [metric, setMetric] = useState('quantite');
   const [periode, setPeriode] = useState('tout');
@@ -46,7 +49,7 @@ export default function Stats() {
 
   if (!data) return <p className="muted">Chargement des statistiques…</p>;
 
-  const { kpis, deltas, parStatut, parMois, charge, topClients, typesMug, ateliers, retards } = data;
+  const { kpis, deltas, marge, parStatut, parMois, charge, topClients, typesMug, ateliers, retards } = data;
 
   // Production 12 mois + comparaison année précédente
   const mois12 = parMois.slice(-12);
@@ -87,6 +90,26 @@ export default function Stats() {
         <Kpi label="À produire" value={fmtNumber(kpis.aProduire)} suffix={`mugs · ${kpis.aProduireCommandes} cmd`} />
         <Kpi label="Clients" value={fmtNumber(kpis.nbClients)} />
       </div>
+
+      {/* Rentabilité (admin) */}
+      {isAdmin && marge && (
+        <div className="card span2 marge-card">
+          <div className="card-head">
+            <h2>Rentabilité <span className="admin-tag">admin</span></h2>
+            <span className="muted">{marge.nbCommandes}/{marge.nbTotal} commandes avec prix de vente</span>
+          </div>
+          {marge.nbCommandes === 0 ? (
+            <p className="muted">Renseignez un prix de vente sur les commandes pour voir la marge.</p>
+          ) : (
+            <div className="marge-metrics">
+              <div><span className="mm-lbl">Chiffre d'affaires</span><span className="mm-val">{fmtNumber(marge.ca)} €</span></div>
+              <div><span className="mm-lbl">Coût ESAT</span><span className="mm-val">{fmtNumber(marge.cout)} €</span></div>
+              <div><span className="mm-lbl">Marge</span><span className={`mm-val ${marge.marge >= 0 ? 'marge-pos' : 'marge-neg'}`}>{fmtNumber(marge.marge)} €</span></div>
+              <div><span className="mm-lbl">Taux de marge</span><span className="mm-val">{marge.taux != null ? `${marge.taux} %` : '—'}</span></div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Production 12 mois + N-1 */}
       <div className="card span2">

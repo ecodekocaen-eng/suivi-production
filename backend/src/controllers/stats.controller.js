@@ -106,6 +106,23 @@ export async function stats(req, res) {
     deltas = { mugs: pct(quantiteTotale, pM), commandes: pct(inPeriod.length, pC), cout: pct(coutAchat, pCout) };
   }
 
+  // ── Rentabilité (réservée ADMIN) : sur les commandes ayant un prix de vente ──
+  let marge = null;
+  if (req.user.role === 'ADMIN') {
+    let ca = 0; let cout = 0; let nb = 0;
+    for (const c of inPeriod) {
+      if (c.prixVente == null) continue;
+      const q = c.quantite || 0;
+      ca += c.prixVente * q; cout += prixLigne(c) * q; nb += 1;
+    }
+    const r2 = (x) => Math.round(x * 100) / 100;
+    marge = {
+      ca: r2(ca), cout: r2(cout), marge: r2(ca - cout),
+      taux: ca > 0 ? Math.round(((ca - cout) / ca) * 1000) / 10 : null,
+      nbCommandes: nb, nbTotal: inPeriod.length,
+    };
+  }
+
   const topClients = [...parClient.entries()].map(([client, v]) => ({ client, ...v }))
     .sort((a, b) => b.quantite - a.quantite).slice(0, 8);
   const typesMug = [...parTypeMug.entries()].map(([type, v]) => ({ type, ...v })).sort((a, b) => b.quantite - a.quantite);
@@ -125,6 +142,7 @@ export async function stats(req, res) {
       aProduireCommandes,
     },
     deltas,
+    marge,
     parStatut,
     parMois,
     charge,

@@ -112,6 +112,11 @@ table.orders tr:hover td { background: #f9fbff; }
 .info-grid dd { margin: 0; font-weight: 500; }
 .marge-pos { color: #166534; }
 .marge-neg { color: #a32d2d; }
+.admin-tag { font-size: 11px; font-weight: 500; color: #185fa5; background: #e6f1fb; border-radius: var(--radius); padding: 2px 8px; }
+.marge-card { border-color: #bfdbfe; margin-bottom: 1.25rem; }
+.marge-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; }
+.mm-lbl { display: block; font-size: .8rem; color: var(--muted); }
+.mm-val { display: block; font-size: 1.5rem; font-weight: 700; }
 
 /* Galerie */
 .gallery-head { display: flex; justify-content: flex-end; margin-bottom: .8rem; }
