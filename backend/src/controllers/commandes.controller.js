@@ -28,6 +28,7 @@ function buildData(body, { partial = false } = {}) {
   // Colonnes métier.
   if (!partial || body.typeMug !== undefined) data.typeMug = cleanStr(body.typeMug);
   if (!partial || body.prixEsat !== undefined) data.prixEsat = parsePrice(body.prixEsat);
+  if (!partial || body.prixVente !== undefined) data.prixVente = parsePrice(body.prixVente);
   if (!partial || body.atelier !== undefined) data.atelier = cleanStr(body.atelier);
   setIf('rebut', parseIntSafe(body.rebut, 0));
   if (!partial || body.noteTransport !== undefined) data.noteTransport = cleanStr(body.noteTransport);
@@ -56,6 +57,13 @@ function buildLignes(body) {
     .filter((l) => l.id || l.typeMug || l.visuel || l.quantite || l.commentaire || l.lien);
 }
 
+// Le prix de vente (et donc la marge) est réservé aux ADMIN.
+function masquerMarge(commande, role) {
+  if (!commande || role === 'ADMIN') return commande;
+  const { prixVente, ...reste } = commande;
+  return reste;
+}
+
 export async function index(req, res) {
   const result = await service.listCommandes({
     search: req.query.search,
@@ -70,6 +78,7 @@ export async function index(req, res) {
     inclureSupprimees: req.user.role === 'ADMIN' && req.query.inclureSupprimees === 'true',
   });
   const counts = await service.countByStatut();
+  result.items = result.items.map((c) => masquerMarge(c, req.user.role));
   res.json({ ...result, counts });
 }
 
@@ -77,7 +86,7 @@ export async function show(req, res) {
   const commande = await service.getCommande(req.params.id);
   if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
   const logs = await getLogsForCommande(commande.id);
-  res.json({ commande, logs });
+  res.json({ commande: masquerMarge(commande, req.user.role), logs });
 }
 
 // Prochaine référence disponible (pour préremplir le formulaire).
@@ -87,11 +96,12 @@ export async function nextReference(req, res) {
 
 export async function create(req, res) {
   const data = buildData(req.body);
+  if (req.user.role !== 'ADMIN') delete data.prixVente; // écriture réservée ADMIN
   // La référence est facultative : générée automatiquement si vide.
   try {
     const commande = await service.createCommande(data, req.user.id, buildLignes(req.body));
     // On renvoie la commande complète (avec ses lignes) pour permettre l'upload par ligne.
-    res.status(201).json({ commande: await service.getCommande(commande.id) });
+    res.status(201).json({ commande: masquerMarge(await service.getCommande(commande.id), req.user.role) });
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Cette référence existe déjà.' });
     throw err;
@@ -100,10 +110,11 @@ export async function create(req, res) {
 
 export async function update(req, res) {
   const data = buildData(req.body, { partial: true });
+  if (req.user.role !== 'ADMIN') delete data.prixVente; // écriture réservée ADMIN
   try {
     const commande = await service.updateCommande(req.params.id, data, req.user.id, buildLignes(req.body));
     if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
-    res.json({ commande });
+    res.json({ commande: masquerMarge(commande, req.user.role) });
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Cette référence existe déjà.' });
     throw err;

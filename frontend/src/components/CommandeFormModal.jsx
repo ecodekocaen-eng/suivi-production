@@ -7,16 +7,19 @@
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { STATUTS, STATUT_LABELS } from '../constants.js';
 import { addJoursOuvres } from '../format.js';
 import LignesEditor, { ligneVide } from './LignesEditor.jsx';
 
 const empty = {
   reference: '', client: '', statut: 'En attente',
-  dateCommande: '', dateSortieTexte: '', prixEsat: '', atelier: '', notes: '',
+  dateCommande: '', dateSortieTexte: '', prixEsat: '', prixVente: '', atelier: '', notes: '',
 };
 
 export default function CommandeFormModal({ onClose, onCreated }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [form, setForm] = useState(empty);
   const [lignes, setLignes] = useState([ligneVide()]);
   const [clients, setClients] = useState([]);
@@ -128,6 +131,12 @@ export default function CommandeFormModal({ onClose, onCreated }) {
                         onClick={() => setForm({ ...form, prixEsat: form.prixEsat === '0.3' ? '' : '0.3' })}>0,30 €</button>
               </div>
             </label>
+
+            {isAdmin && (
+              <label>Prix de vente (€ / unité)
+                <input value={form.prixVente} onChange={set('prixVente')} placeholder="2.50" />
+              </label>
+            )}
           </div>
 
           {/* Lignes multiples (sous atelier / prix ESAT), avec upload de visuels par ligne */}

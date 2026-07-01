@@ -41,6 +41,7 @@ model Commande {
   // ── Colonnes métier conservées depuis la Google Sheet ──
   typeMug         String?
   prixEsat        Float?
+  prixVente       Float? // prix de vente unitaire (marge) — réservé ADMIN
   atelier         String? // LETTRAGE / CONDITIONNEMENT
   rebut           Int      @default(0)
   noteTransport   String? // CHRONO, recup alex…

@@ -52,12 +52,21 @@ export default function CommandeDetail() {
   }
   const expediee = commande.statut === 'Expédié';
 
+  // Marge (réservée ADMIN) : (prix de vente − coût unitaire) × quantité.
+  const isAdmin = user?.role === 'ADMIN';
+  const coutU = commande.prixEsat != null ? commande.prixEsat : (produitsByNom[commande.typeMug]?.prixAchat ?? 0);
+  const qte = commande.quantite || 0;
+  const marge = commande.prixVente != null ? (commande.prixVente - coutU) * qte : null;
+  const caTotal = commande.prixVente != null ? commande.prixVente * qte : null;
+  const tauxMarge = (marge != null && caTotal > 0) ? Math.round((marge / caTotal) * 100) : null;
+
   const startEdit = () => {
     setForm({
       client: commande.client || '',
       dateCommande: toDateInput(commande.dateCommande),
       dateSortieTexte: commande.dateSortieTexte || '',
       prixEsat: commande.prixEsat != null ? String(commande.prixEsat) : '',
+      prixVente: commande.prixVente != null ? String(commande.prixVente) : '',
       atelier: commande.atelier || '',
       rebut: commande.rebut ?? 0,
       noteTransport: commande.noteTransport || '',
@@ -148,6 +157,14 @@ export default function CommandeDetail() {
             <dt>Type de mug</dt><dd>{commande.typeMug || '—'}</dd>
             <dt>Quantité</dt><dd>{commande.quantite}</dd>
             <dt>Prix ESAT</dt><dd>{commande.prixEsat != null ? `${commande.prixEsat} €` : '—'}</dd>
+            {isAdmin && <><dt>Prix de vente</dt><dd>{commande.prixVente != null ? `${commande.prixVente} €/u` : '—'}</dd></>}
+            {isAdmin && marge != null && (
+              <><dt>Marge</dt><dd className={marge >= 0 ? 'marge-pos' : 'marge-neg'}>
+                <strong>{fmtNumber(Math.round(marge * 100) / 100)} €</strong>
+                {tauxMarge != null && <span className="muted"> ({tauxMarge}%)</span>}
+                <span className="muted small"> · CA {fmtNumber(Math.round(caTotal * 100) / 100)} €</span>
+              </dd></>
+            )}
             <dt>Date de commande</dt><dd>{fmtDate(commande.dateCommande)}</dd>
             <dt>Date de sortie</dt><dd>{commande.dateSortieTexte || fmtDate(commande.dateLivraison)}</dd>
             <dt>Atelier</dt><dd>{commande.atelier || '—'}</dd>
@@ -168,6 +185,11 @@ export default function CommandeDetail() {
                           onClick={() => setForm({ ...form, prixEsat: form.prixEsat === '0.3' ? '' : '0.3' })}>0,30 €</button>
                 </div>
               </label>
+              {isAdmin && (
+                <label>Prix de vente (€ / unité)
+                  <input value={form.prixVente} onChange={set('prixVente')} placeholder="2.50" />
+                </label>
+              )}
               <label>Date de commande<input type="date" value={form.dateCommande} onChange={set('dateCommande')} /></label>
               <label>Date de sortie (texte)<input value={form.dateSortieTexte} onChange={set('dateSortieTexte')} /></label>
               <label>Atelier<input value={form.atelier} onChange={set('atelier')} /></label>

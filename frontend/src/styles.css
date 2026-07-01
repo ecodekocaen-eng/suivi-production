@@ -110,6 +110,8 @@ table.orders tr:hover td { background: #f9fbff; }
 .info-grid { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1rem; margin: 0; }
 .info-grid dt { color: var(--muted); font-size: .85rem; }
 .info-grid dd { margin: 0; font-weight: 500; }
+.marge-pos { color: #166534; }
+.marge-neg { color: #a32d2d; }
 
 /* Galerie */
 .gallery-head { display: flex; justify-content: flex-end; margin-bottom: .8rem; }
