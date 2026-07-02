@@ -9,7 +9,7 @@ import { LOG_ACTIONS, STATUT_EXPEDIEE, STATUT_LABELS } from '../constants.js';
 
 // Colonnes triables autorisées (liste blanche).
 const SORTABLE = new Set([
-  'reference', 'client', 'designation', 'quantite', 'statut',
+  'reference', 'client', 'designation', 'typeMug', 'quantite', 'statut',
   'dateCommande', 'dateLivraison', 'createdAt',
 ]);
 
