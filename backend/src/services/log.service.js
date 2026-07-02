@@ -20,3 +20,13 @@ export function getLogsForCommande(commandeId) {
     orderBy: { createdAt: 'desc' },
   });
 }
+
+// Journal d'audit des comptes (création / modification / suppression).
+export function getUserAuditLogs(actions, limit = 100) {
+  return prisma.log.findMany({
+    where: { action: { in: actions } },
+    include: { user: { select: { nom: true, email: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+}

@@ -295,6 +295,9 @@ label.full { margin-top: 1rem; }
 .modal { background: var(--card); border-radius: var(--radius); padding: 1.5rem; width: 760px; max-width: 95vw; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
 .modal h2 { margin-top: 0; }
 
+/* Actions dans la page Utilisateurs */
+.user-actions { display: flex; gap: .4rem; align-items: center; }
+
 /* Réglages de production (sur la fiche commande) */
 .reglage { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
   margin: .5rem 0 .75rem; padding: .5rem .7rem; border-radius: 8px; font-size: .85rem; }
