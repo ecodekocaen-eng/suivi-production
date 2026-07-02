@@ -10,6 +10,7 @@ import StatutBadge from '../components/StatutBadge.jsx';
 import GalerieVisuels from '../components/GalerieVisuels.jsx';
 import UploadZone from '../components/UploadZone.jsx';
 import LignesEditor from '../components/LignesEditor.jsx';
+import Thumb from '../components/Thumb.jsx';
 import { fmtDate, fmtDateTime, fmtNumber } from '../format.js';
 
 // Convertit une date ISO en valeur pour <input type="date"> (yyyy-mm-dd).
