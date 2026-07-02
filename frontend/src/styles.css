@@ -74,6 +74,14 @@ table.orders { width: 100%; border-collapse: collapse; font-size: .9rem; }
 table.orders th, table.orders td { padding: .55rem .7rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
 table.orders th { background: #f8fafc; font-weight: 600; }
 table.orders tr:hover td { background: #f9fbff; }
+.row-click { cursor: pointer; }
+/* Colonne d'action figée à droite : le bouton « Ouvrir » reste toujours visible. */
+table.orders th.col-action, table.orders td.col-action {
+  position: sticky; right: 0; text-align: right;
+  background: var(--card); box-shadow: -6px 0 6px -6px rgba(0, 0, 0, .12);
+}
+table.orders th.col-action { background: #f8fafc; }
+table.orders tr:hover td.col-action { background: #f9fbff; }
 .row-deleted td { opacity: .55; font-style: italic; }
 .empty-cell { text-align: center; color: var(--muted); padding: 2rem !important; }
 

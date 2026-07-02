@@ -33,7 +33,7 @@ export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onSt
             <Th label="Commande" col="dateCommande" {...{ sortBy, sortDir, onSort }} />
             <Th label="Livraison" col="dateLivraison" {...{ sortBy, sortDir, onSort }} />
             <th className="num">📎</th>
-            <th></th>
+            <th className="col-action"></th>
           </tr>
         </thead>
         <tbody>
@@ -41,13 +41,17 @@ export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onSt
             <tr><td colSpan="10" className="empty-cell">Aucune commande.</td></tr>
           )}
           {commandes.map((c) => (
-            <tr key={c.id} className={c.supprime ? 'row-deleted' : ''}>
+            <tr
+              key={c.id}
+              className={`row-click ${c.supprime ? 'row-deleted' : ''}`}
+              onClick={() => navigate(`/commandes/${c.id}`)}
+            >
               <td className="mono">{c.reference}</td>
               <td className="strong">{c.client}</td>
               <td>{c.designation}</td>
               <td>{c.typeMug || '—'}</td>
               <td className="num">{c.quantite}</td>
-              <td>
+              <td onClick={(e) => e.stopPropagation()}>
                 <select
                   className={`status-select ${STATUT_CLASS[c.statut] || ''}`}
                   value={c.statut}
@@ -59,7 +63,9 @@ export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onSt
               <td>{fmtDate(c.dateCommande)}</td>
               <td>{c.dateSortieTexte || fmtDate(c.dateLivraison)}</td>
               <td className="num">{c._count?.fichiers > 0 ? c._count.fichiers : ''}</td>
-              <td><button className="btn btn-ghost btn-sm" onClick={() => navigate(`/commandes/${c.id}`)}>Ouvrir</button></td>
+              <td className="col-action">
+                <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); navigate(`/commandes/${c.id}`); }}>Ouvrir</button>
+              </td>
             </tr>
           ))}
         </tbody>
