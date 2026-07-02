@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────────────────────
-//  Tableau de bord : indicateurs, filtres, recherche, tri, pagination.
+//  Tableau de bord : indicateurs (= filtres multi-statuts), recherche,
+//  tri, pagination.
 // ─────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
@@ -8,15 +9,17 @@ import { STATUTS, STATUT_LABELS, STATUT_CLASS } from '../constants.js';
 import CommandeTable from '../components/CommandeTable.jsx';
 import CommandeFormModal from '../components/CommandeFormModal.jsx';
 
+// Statuts affichés par défaut (les commandes « en cours »).
+const DEFAUT_STATUTS = ['En attente', 'Impression OK', 'En cours de prod'];
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [data, setData] = useState({ items: [], total: 0, totalPages: 1, counts: {} });
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
-  // État des filtres / tri / pagination.
   const [filters, setFilters] = useState({
-    search: '', statut: '', page: 1, pageSize: 20,
+    search: '', statuts: DEFAUT_STATUTS, page: 1, pageSize: 20,
     sortBy: 'dateCommande', sortDir: 'desc', inclureSupprimees: false,
   });
 
@@ -24,7 +27,10 @@ export default function Dashboard() {
     setLoading(true);
     const qs = new URLSearchParams();
     if (filters.search) qs.set('search', filters.search);
-    if (filters.statut) qs.set('statut', filters.statut);
+    // On envoie le filtre seulement si une partie des statuts est sélectionnée.
+    if (filters.statuts.length > 0 && filters.statuts.length < STATUTS.length) {
+      qs.set('statut', filters.statuts.join(','));
+    }
     qs.set('page', filters.page);
     qs.set('pageSize', filters.pageSize);
     qs.set('sortBy', filters.sortBy);
@@ -39,7 +45,6 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Tri : clic sur une colonne → bascule asc/desc.
   const onSort = (col) => setFilters((f) => ({
     ...f,
     sortBy: col,
@@ -47,13 +52,20 @@ export default function Dashboard() {
     page: 1,
   }));
 
-  // Changement de statut inline.
   const onStatutChange = async (commande, statut) => {
     await api.patch(`/commandes/${commande.id}/statut`, { statut });
     load();
   };
 
   const setField = (k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }));
+
+  // Active/désactive un statut dans le filtre (multi-sélection).
+  const toggleStatut = (s) => setFilters((f) => {
+    const statuts = f.statuts.includes(s) ? f.statuts.filter((x) => x !== s) : [...f.statuts, s];
+    return { ...f, statuts, page: 1 };
+  });
+
+  const tousAffiches = filters.statuts.length === 0 || filters.statuts.length === STATUTS.length;
 
   return (
     <>
@@ -62,13 +74,14 @@ export default function Dashboard() {
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Nouvelle commande</button>
       </div>
 
-      {/* Indicateurs par statut */}
+      {/* Indicateurs = filtres multi-statuts (cliquez pour afficher/masquer) */}
       <div className="stats">
         {STATUTS.map((s) => (
           <button
             key={s}
-            className={`stat-card ${STATUT_CLASS[s]} ${filters.statut === s ? 'active' : ''}`}
-            onClick={() => setField('statut', filters.statut === s ? '' : s)}
+            className={`stat-card ${STATUT_CLASS[s]} ${filters.statuts.includes(s) ? 'active' : ''}`}
+            onClick={() => toggleStatut(s)}
+            title="Cliquer pour afficher / masquer ce statut"
           >
             <span className="stat-num">{data.counts?.[s] ?? 0}</span>
             <span className="stat-label">{STATUT_LABELS[s]}</span>
@@ -83,10 +96,10 @@ export default function Dashboard() {
           value={filters.search}
           onChange={(e) => setField('search', e.target.value)}
         />
-        <select value={filters.statut} onChange={(e) => setField('statut', e.target.value)}>
-          <option value="">Tous les statuts</option>
-          {STATUTS.map((s) => <option key={s} value={s}>{STATUT_LABELS[s]}</option>)}
-        </select>
+        <span className="filter-presets">
+          <button className="btn btn-ghost btn-sm" onClick={() => setField('statuts', DEFAUT_STATUTS)}>Actifs</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setField('statuts', [])}>Tout</button>
+        </span>
         {user?.role === 'ADMIN' && (
           <label className="check">
             <input type="checkbox" checked={filters.inclureSupprimees}
@@ -96,7 +109,10 @@ export default function Dashboard() {
         )}
       </div>
 
-      <p className="muted">{data.total} commande(s){loading ? ' — chargement…' : ''}</p>
+      <p className="muted">
+        {data.total} commande(s){loading ? ' — chargement…' : ''}
+        {!tousAffiches && ` · filtre : ${filters.statuts.map((s) => STATUT_LABELS[s]).join(', ')}`}
+      </p>
 
       <CommandeTable
         commandes={data.items}

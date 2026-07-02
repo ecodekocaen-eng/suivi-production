@@ -15,13 +15,13 @@ const SORTABLE = new Set([
 
 // Liste paginée avec filtres, recherche, tri.
 export async function listCommandes({
-  search, statut, livraisonDebut, livraisonFin,
+  search, statuts, livraisonDebut, livraisonFin,
   page = 1, pageSize = 20, sortBy = 'dateCommande', sortDir = 'desc',
   inclureSupprimees = false,
 }) {
   const where = {};
   if (!inclureSupprimees) where.supprime = false;
-  if (statut) where.statut = statut;
+  if (Array.isArray(statuts) && statuts.length > 0) where.statut = { in: statuts };
 
   if (search) {
     where.OR = [

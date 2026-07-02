@@ -65,9 +65,10 @@ function masquerMarge(commande, role) {
 }
 
 export async function index(req, res) {
+  const statuts = (req.query.statut || '').split(',').map((s) => s.trim()).filter(Boolean);
   const result = await service.listCommandes({
     search: req.query.search,
-    statut: req.query.statut,
+    statuts,
     livraisonDebut: req.query.livraisonDebut,
     livraisonFin: req.query.livraisonFin,
     page: req.query.page,
