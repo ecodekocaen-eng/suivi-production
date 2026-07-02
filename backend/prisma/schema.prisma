@@ -128,6 +128,20 @@ model Produit {
   createdAt DateTime @default(now())
 }
 
+// Réglages de production par visuel (température, temps de presse, note).
+// La clé `cle` est le visuel normalisé (majuscules, espaces réduits) pour
+// retrouver le réglage même si l'orthographe varie légèrement.
+model Reglage {
+  id            Int      @id @default(autoincrement())
+  cle           String   @unique // visuel normalisé (clé de correspondance)
+  visuel        String            // libellé affiché (dernière saisie)
+  temperature   Int? // °C
+  tempsSecondes Int? // temps de presse en secondes
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 model Log {
   id        Int      @id @default(autoincrement())
   action    String

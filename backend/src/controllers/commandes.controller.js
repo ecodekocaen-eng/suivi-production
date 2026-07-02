@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 import * as service from '../services/commandes.service.js';
 import { getLogsForCommande } from '../services/log.service.js';
+import { getReglagesForVisuels } from '../services/reglages.service.js';
 import { STATUTS } from '../constants.js';
 import { parseFrDate, parseIntSafe, parsePrice, cleanStr } from '../utils/parse.js';
 
@@ -87,7 +88,12 @@ export async function show(req, res) {
   const commande = await service.getCommande(req.params.id);
   if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
   const logs = await getLogsForCommande(commande.id);
-  res.json({ commande: masquerMarge(commande, req.user.role), logs });
+  // Réglages de production connus pour les visuels de la commande.
+  const visuels = commande.lignes?.length
+    ? commande.lignes.map((l) => l.visuel)
+    : [commande.designation];
+  const reglages = await getReglagesForVisuels(visuels);
+  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages });
 }
 
 // Prochaine référence disponible (pour préremplir le formulaire).

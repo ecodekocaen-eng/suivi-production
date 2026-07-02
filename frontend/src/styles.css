@@ -294,3 +294,32 @@ label.full { margin-top: 1rem; }
   align-items: flex-start; justify-content: center; padding: 3rem 1rem; z-index: 100; overflow: auto; }
 .modal { background: var(--card); border-radius: var(--radius); padding: 1.5rem; width: 760px; max-width: 95vw; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
 .modal h2 { margin-top: 0; }
+
+/* Réglages de production (sur la fiche commande) */
+.reglage { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
+  margin: .5rem 0 .75rem; padding: .5rem .7rem; border-radius: 8px; font-size: .85rem; }
+.reglage-known { background: #ecfdf5; border: 1px solid #a7f3d0; }
+.reglage-empty { background: #f8fafc; border: 1px dashed var(--border); color: var(--muted); }
+.reglage-edit { background: #f8fafc; border: 1px solid var(--border); flex-direction: column; align-items: stretch; }
+.reglage-tag { background: #059669; color: #fff; border-radius: 999px; padding: .1rem .5rem; font-size: .72rem; }
+.reglage-val { font-weight: 600; }
+.reglage-sep { color: var(--muted); }
+.reglage-note-txt { color: #475569; font-style: italic; }
+.reglage-modif { margin-left: auto; }
+.reglage-fields { display: flex; flex-wrap: wrap; gap: .6rem; }
+.reglage-fields label { display: flex; flex-direction: column; font-size: .78rem; color: var(--muted); gap: .2rem; }
+.reglage-fields input { width: 8rem; }
+.reglage-fields .reglage-note { flex: 1; min-width: 12rem; }
+.reglage-fields .reglage-note input { width: 100%; }
+.reglage-actions { display: flex; gap: .4rem; margin-top: .5rem; }
+.reglage-err { color: var(--danger); font-size: .8rem; }
+
+/* Formulaire de la bibliothèque de réglages */
+.reglage-form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }
+.reglage-form label { display: flex; flex-direction: column; font-size: .82rem; gap: .25rem; }
+.reglage-form input { min-width: 8rem; }
+.reglage-form-visuel { flex: 1 1 16rem; }
+.reglage-form-visuel input { width: 100%; }
+.reglage-form-note { flex: 2 1 16rem; }
+.reglage-form-note input { width: 100%; }
+.reglage-form-actions { display: flex; gap: .5rem; }

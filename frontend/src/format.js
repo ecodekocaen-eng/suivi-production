@@ -43,6 +43,17 @@ export function addJoursOuvres(dateStr, n) {
   return d.toLocaleDateString('fr-FR');
 }
 
+// Temps de presse en secondes → '60 s' ou '1 min 30 s'.
+export function fmtTemps(s) {
+  if (s == null || s === '') return '—';
+  const n = Number(s);
+  if (Number.isNaN(n)) return '—';
+  if (n < 60) return `${n} s`;
+  const min = Math.floor(n / 60);
+  const sec = n % 60;
+  return sec ? `${min} min ${sec} s` : `${min} min`;
+}
+
 // Taille en octets → Ko/Mo lisible.
 export function fmtSize(bytes) {
   if (!bytes && bytes !== 0) return '';

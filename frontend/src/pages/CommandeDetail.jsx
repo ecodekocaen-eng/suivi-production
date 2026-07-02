@@ -11,7 +11,11 @@ import GalerieVisuels from '../components/GalerieVisuels.jsx';
 import UploadZone from '../components/UploadZone.jsx';
 import LignesEditor from '../components/LignesEditor.jsx';
 import Thumb from '../components/Thumb.jsx';
+import ReglageLigne from '../components/ReglageLigne.jsx';
 import { fmtDate, fmtDateTime, fmtNumber } from '../format.js';
+
+// Clé de correspondance d'un visuel (identique à la normalisation backend).
+const normVisuel = (s) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
 // Convertit une date ISO en valeur pour <input type="date"> (yyyy-mm-dd).
 const toDateInput = (iso) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
@@ -43,6 +47,7 @@ export default function CommandeDetail() {
 
   if (!data) return <p className="muted">Chargement…</p>;
   const { commande, logs } = data;
+  const reglages = data.reglages || {};
 
   // Regroupe les visuels par ligne (et ceux non rattachés à une ligne).
   const filesByLigne = {};
@@ -250,6 +255,7 @@ export default function CommandeDetail() {
                     {l.lien && <> · 🔗 <a href={l.lien} target="_blank" rel="noopener noreferrer">lien de transfert</a></>}
                   </span>
                 </div>
+                <ReglageLigne visuel={l.visuel} reglage={reglages[normVisuel(l.visuel)]} onSaved={load} />
                 <GalerieVisuels commandeId={commande.id} fichiers={filesByLigne[l.id] || []} onChange={load} showZip={false} />
                 {!expediee && (
                   <UploadZone commandeId={commande.id} ligneId={l.id} onUploaded={load} compact />
@@ -268,6 +274,7 @@ export default function CommandeDetail() {
         ) : (
           <>
             {/* Commande sans lignes : visuels au niveau commande */}
+            <ReglageLigne visuel={commande.designation} reglage={reglages[normVisuel(commande.designation)]} onSaved={load} />
             <GalerieVisuels commandeId={commande.id} fichiers={commande.fichiers} onChange={load} showZip={false} />
             {!expediee && (
               <div style={{ marginTop: '1rem' }}>

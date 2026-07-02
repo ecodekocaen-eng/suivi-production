@@ -9,6 +9,7 @@ import CommandeDetail from './pages/CommandeDetail.jsx';
 import Stats from './pages/Stats.jsx';
 import Clients from './pages/Clients.jsx';
 import Produits from './pages/Produits.jsx';
+import Reglages from './pages/Reglages.jsx';
 import Users from './pages/Users.jsx';
 
 // N'autorise l'accès qu'aux utilisateurs connectés (option adminOnly).
@@ -32,6 +33,7 @@ function Layout({ children }) {
         <Link to="/" className="brand">☕ Suivi production <span>ECODEKO</span></Link>
         <nav>
           <Link to="/">Tableau</Link>
+          <Link to="/reglages">Réglages</Link>
           <Link to="/statistiques">Statistiques</Link>
           {user?.role === 'ADMIN' && <Link to="/clients">Clients</Link>}
           {user?.role === 'ADMIN' && <Link to="/produits">Produits</Link>}
@@ -51,6 +53,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protected><Dashboard /></Protected>} />
       <Route path="/commandes/:id" element={<Protected><CommandeDetail /></Protected>} />
+      <Route path="/reglages" element={<Protected><Reglages /></Protected>} />
       <Route path="/statistiques" element={<Protected><Stats /></Protected>} />
       <Route path="/clients" element={<Protected adminOnly><Clients /></Protected>} />
       <Route path="/produits" element={<Protected adminOnly><Produits /></Protected>} />
