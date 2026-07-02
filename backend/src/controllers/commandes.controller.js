@@ -129,12 +129,13 @@ export async function update(req, res) {
 }
 
 // Modification rapide du statut uniquement (action inline du tableau).
+// Accessible aux opérateurs : on masque donc la marge dans la réponse.
 export async function updateStatut(req, res) {
   const { statut } = req.body;
   if (!STATUTS.includes(statut)) return res.status(400).json({ error: 'Statut invalide.' });
   const commande = await service.updateCommande(req.params.id, { statut }, req.user.id);
   if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
-  res.json({ commande });
+  res.json({ commande: masquerMarge(commande, req.user.role) });
 }
 
 export async function remove(req, res) {
@@ -143,7 +144,8 @@ export async function remove(req, res) {
   res.json({ ok: true });
 }
 
+// Restauration : route réservée ADMIN, mais on masque par cohérence.
 export async function restore(req, res) {
   const commande = await service.restoreCommande(req.params.id, req.user.id);
-  res.json({ commande });
+  res.json({ commande: masquerMarge(commande, req.user.role) });
 }
