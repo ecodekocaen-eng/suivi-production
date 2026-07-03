@@ -43,6 +43,12 @@ export function addJoursOuvres(dateStr, n) {
   return d.toLocaleDateString('fr-FR');
 }
 
+// Montant en euros : '1 234,50 €' (ou '—').
+export function fmtEuro(n) {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return `${Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+}
+
 // Temps de presse en secondes → '60 s' ou '1 min 30 s'.
 export function fmtTemps(s) {
   if (s == null || s === '') return '—';

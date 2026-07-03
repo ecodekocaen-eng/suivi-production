@@ -9,3 +9,16 @@ export function requireAdmin(req, res, next) {
   }
   next();
 }
+
+// N'autorise que les rôles listés (ex : requireRole('ADMIN', 'COMPTABLE')).
+export function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.user?.role)) {
+      return res.status(403).json({ error: 'Accès non autorisé pour ce rôle.' });
+    }
+    next();
+  };
+}
+
+// Rôles « production » : tout sauf le compte comptable (qui ne voit que la facturation).
+export const requireProduction = requireRole('ADMIN', 'OPERATEUR');

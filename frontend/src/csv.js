@@ -12,6 +12,37 @@ function cell(v) {
 }
 const row = (arr) => arr.map(cell).join(';');
 
+// Télécharge un blob CSV (BOM UTF-8 + CRLF pour Excel FR).
+function downloadCsv(lines, filename) {
+  const csv = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Export CSV d'un relevé de facturation ESAT.
+export function exportReleveCsv(releve) {
+  const L = [];
+  L.push(row(['Relevé de facturation ESAT — ECODEKO']));
+  L.push(row(['Numéro', releve.numero]));
+  if (releve.libelle) L.push(row(['Libellé', releve.libelle]));
+  L.push(row(['Établi le', new Date(releve.createdAt).toLocaleDateString('fr-FR')]));
+  L.push('');
+  L.push(row(['Référence', 'Client', 'Désignation', 'Quantité', 'Prix ESAT (€)', 'Montant (€)']));
+  for (const l of releve.lignes) {
+    L.push(row([l.reference, l.client, l.designation, l.quantite, l.prixEsat ?? '', l.montant]));
+  }
+  L.push('');
+  L.push(row(['TOTAL (€)', '', '', '', '', releve.total]));
+  downloadCsv(L, `${releve.numero}.csv`);
+}
+
 export function exportStatsCsv(data, periodeLabel) {
   const L = [];
   L.push(row(['Statistiques de production — ECODEKO']));

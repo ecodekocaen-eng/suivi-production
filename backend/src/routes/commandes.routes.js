@@ -3,12 +3,12 @@
 // ─────────────────────────────────────────────────────────────
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { requireAdmin } from '../middleware/role.middleware.js';
+import { requireAdmin, requireProduction } from '../middleware/role.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import * as c from '../controllers/commandes.controller.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireProduction);
 
 router.get('/', asyncHandler(c.index));
 // Avant /:id pour ne pas être capturé comme un identifiant.

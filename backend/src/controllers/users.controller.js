@@ -93,6 +93,7 @@ export async function deleteUser(req, res) {
 
   await prisma.commande.updateMany({ where: { modifieParId: id }, data: { modifieParId: null } });
   await prisma.log.updateMany({ where: { userId: id }, data: { userId: null } });
+  await prisma.releve.updateMany({ where: { creeParId: id }, data: { creeParId: null } });
   await prisma.user.delete({ where: { id } });
 
   await addLog({

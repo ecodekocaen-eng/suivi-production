@@ -4,13 +4,14 @@
 // ─────────────────────────────────────────────────────────────
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { requireProduction } from '../middleware/role.middleware.js';
 import { upload as uploadMw } from '../middleware/upload.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import * as f from '../controllers/fichiers.controller.js';
 
 // mergeParams: true → accès à :id de la commande parente.
 const router = Router({ mergeParams: true });
-router.use(requireAuth);
+router.use(requireAuth, requireProduction);
 
 router.post('/', uploadMw.array('files', 20), asyncHandler(f.upload));
 // Upload ciblant une ligne : /api/commandes/:id/fichiers/ligne/:ligneId

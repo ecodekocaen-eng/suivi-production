@@ -32,6 +32,7 @@ model User {
 
   commandesModifiees Commande[] @relation("ModifiePar")
   logs               Log[]
+  releves            Releve[]
 }
 
 model Commande {
@@ -59,6 +60,11 @@ model Commande {
   // ── Suppression automatique des fichiers à l'expédition ──
   fichiersSupprimes   Boolean   @default(false)
   fichiersSupprimesAt DateTime?
+
+  // ── Facturation ESAT : rattachement à un relevé (null = à facturer) ──
+  releve    Releve?   @relation(fields: [releveId], references: [id])
+  releveId  Int?
+  factureAt DateTime? // date du marquage « facturée » (avec ou sans relevé)
 
   // ── Soft delete (réservé ADMIN) ──
   supprime   Boolean   @default(false)
@@ -126,6 +132,23 @@ model Produit {
   imageUrl  String? // URL publique (Vercel Blob) ; null en stockage disque
   actif     Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+// Relevé de facturation ESAT : groupe de commandes facturées ensemble.
+// detailJson fige les lignes (réf, client, qté, prix, montant) au moment
+// de la création, pour que le relevé reste exact même si une commande change.
+model Releve {
+  id         Int      @id @default(autoincrement())
+  numero     String   @unique // ex : REL-2026-001
+  libelle    String? // ex : « Juin 2026 »
+  total      Float    @default(0)
+  detailJson String? // lignes figées (JSON)
+  createdAt  DateTime @default(now())
+
+  creePar   User? @relation(fields: [creeParId], references: [id])
+  creeParId Int?
+
+  commandes Commande[]
 }
 
 // Réglages de production par visuel (température, temps de presse, note).

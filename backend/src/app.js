@@ -23,6 +23,7 @@ import statsRoutes from './routes/stats.routes.js';
 import clientsRoutes from './routes/clients.routes.js';
 import produitsRoutes from './routes/produits.routes.js';
 import reglagesRoutes from './routes/reglages.routes.js';
+import facturationRoutes from './routes/facturation.routes.js';
 import cronRoutes from './routes/cron.routes.js';
 
 export function createApp() {
@@ -50,6 +51,7 @@ export function createApp() {
   app.use('/api/clients', clientsRoutes);
   app.use('/api/produits', produitsRoutes);
   app.use('/api/reglages', reglagesRoutes);
+  app.use('/api/facturation', facturationRoutes);
   app.use('/api/cron', cronRoutes);
   // Sous-routes fichiers (déclarées avant pour le préfixe plus spécifique).
   app.use('/api/commandes/:id/fichiers', fichiersRoutes);

@@ -298,6 +298,31 @@ label.full { margin-top: 1rem; }
 /* Actions dans la page Utilisateurs */
 .user-actions { display: flex; gap: .4rem; align-items: center; }
 
+/* Facturation ESAT */
+.factu-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.factu-recap { display: flex; gap: 1.2rem; align-items: baseline; flex-wrap: wrap; }
+.factu-total { font-size: 1.15rem; color: var(--primary); }
+.factu-warn { color: #b45309; font-size: .85rem; }
+.factu-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.factu-actions input { min-width: 15rem; }
+.factu-filtres { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+/* Document relevé (imprimable) */
+.releve-doc { max-width: 900px; }
+.releve-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.releve-title { margin: 0 0 .2rem; font-size: 1.3rem; }
+.releve-meta { text-align: right; font-size: .9rem; line-height: 1.7; }
+.releve-total td { border-top: 2px solid var(--text); font-size: 1rem; }
+.releve-foot { margin-top: 1rem; font-size: .8rem; }
+
+/* Impression : on ne garde que le document */
+@media print {
+  .topbar, .no-print { display: none !important; }
+  body { background: #fff; }
+  .container { margin: 0; padding: 0; max-width: none; }
+  .card.releve-doc { border: none; box-shadow: none; padding: 0; max-width: none; }
+}
+
 /* Réglages de production (sur la fiche commande) */
 .reglage { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
   margin: .5rem 0 .75rem; padding: .5rem .7rem; border-radius: 8px; font-size: .85rem; }

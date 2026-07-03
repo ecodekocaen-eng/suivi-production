@@ -4,11 +4,12 @@
 // ─────────────────────────────────────────────────────────────
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { requireProduction } from '../middleware/role.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import * as r from '../controllers/reglages.controller.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireProduction);
 
 router.get('/', asyncHandler(r.index));
 router.post('/', asyncHandler(r.upsert));

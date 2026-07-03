@@ -67,6 +67,7 @@ export default function Users() {
           <input placeholder="Mot de passe (min. 6)" type="text" value={form.password} onChange={set('password')} required />
           <select value={form.role} onChange={set('role')}>
             <option value="OPERATEUR">Opérateur</option>
+            <option value="COMPTABLE">Comptable (facturation ESAT)</option>
             <option value="ADMIN">Admin</option>
           </select>
           <button className="btn btn-primary">Créer</button>
@@ -91,6 +92,7 @@ export default function Users() {
                       <select value={u.role} disabled={isSelf}
                               onChange={(e) => majUser(u.id, { role: e.target.value })}>
                         <option value="OPERATEUR">Opérateur</option>
+                        <option value="COMPTABLE">Comptable</option>
                         <option value="ADMIN">Admin</option>
                       </select>
                     </td>

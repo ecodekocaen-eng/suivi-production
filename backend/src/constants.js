@@ -25,7 +25,9 @@ export const STATUT_LABELS = {
 // Statut qui déclenche la suppression automatique des fichiers.
 export const STATUT_EXPEDIEE = 'Expédié';
 
-export const ROLES = ['ADMIN', 'OPERATEUR'];
+// COMPTABLE : compte dédié à la facturation ESAT — n'accède qu'au module
+// facturation (jamais au prix de vente ni à la marge).
+export const ROLES = ['ADMIN', 'OPERATEUR', 'COMPTABLE'];
 
 // Types MIME autorisés à l'upload (images + PDF).
 export const ALLOWED_MIME_TYPES = [
@@ -53,6 +55,9 @@ export const LOG_ACTIONS = {
   USER_CREE: 'USER_CREE',
   USER_MODIFIE: 'USER_MODIFIE',
   USER_SUPPRIME: 'USER_SUPPRIME',
+  RELEVE_CREE: 'RELEVE_CREE',
+  RELEVE_ANNULE: 'RELEVE_ANNULE',
+  COMMANDES_EXCLUES_FACTURATION: 'COMMANDES_EXCLUES_FACTURATION',
 };
 
 // Actions liées aux comptes (pour le journal d'audit de la page Utilisateurs).
