@@ -86,6 +86,15 @@ function deriveHeader(lignes) {
   return { quantite, typeMug, designation };
 }
 
+// Marque la commande comme ouverte (première consultation). Idempotent :
+// ne touche que les commandes jamais ouvertes.
+export function marquerOuverte(id) {
+  return prisma.commande.updateMany({
+    where: { id: Number(id), ouverteAt: null },
+    data: { ouverteAt: new Date() },
+  });
+}
+
 // Compte des commandes (non supprimées) par statut, pour le tableau de bord.
 export async function countByStatut() {
   const rows = await prisma.commande.groupBy({

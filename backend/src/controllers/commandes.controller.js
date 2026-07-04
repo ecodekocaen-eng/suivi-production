@@ -87,6 +87,8 @@ export async function index(req, res) {
 export async function show(req, res) {
   const commande = await service.getCommande(req.params.id);
   if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
+  // Première consultation : la commande n'est plus « nouvelle » dans le tableau.
+  await service.marquerOuverte(commande.id);
   const logs = await getLogsForCommande(commande.id);
   // Réglages de production connus pour les visuels de la commande.
   const visuels = commande.lignes?.length
@@ -135,6 +137,8 @@ export async function updateStatut(req, res) {
   if (!STATUTS.includes(statut)) return res.status(400).json({ error: 'Statut invalide.' });
   const commande = await service.updateCommande(req.params.id, { statut }, req.user.id);
   if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });
+  // Changer le statut depuis le tableau vaut prise de connaissance.
+  await service.marquerOuverte(commande.id);
   res.json({ commande: masquerMarge(commande, req.user.role) });
 }
 

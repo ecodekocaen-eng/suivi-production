@@ -43,10 +43,13 @@ export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onSt
           {commandes.map((c) => (
             <tr
               key={c.id}
-              className={`row-click ${c.supprime ? 'row-deleted' : ''}`}
+              className={`row-click ${c.supprime ? 'row-deleted' : ''} ${!c.ouverteAt && !c.supprime ? 'row-new' : ''}`}
               onClick={() => navigate(`/commandes/${c.id}`)}
             >
-              <td className="mono">{c.reference}</td>
+              <td className="mono">
+                {!c.ouverteAt && !c.supprime && <span className="new-dot" title="Commande jamais ouverte">●</span>}
+                {c.reference}
+              </td>
               <td className="strong">{c.client}</td>
               <td>{c.designation}</td>
               <td>{c.typeMug || '—'}</td>

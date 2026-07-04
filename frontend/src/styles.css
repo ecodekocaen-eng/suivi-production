@@ -323,6 +323,13 @@ label.full { margin-top: 1rem; }
   .card.releve-doc { border: none; box-shadow: none; padding: 0; max-width: none; }
 }
 
+/* Commandes jamais ouvertes : surlignées jusqu'à leur première ouverture */
+table.orders tr.row-new td { background: #fefce8; }
+table.orders tr.row-new td.col-action { background: #fefce8; }
+table.orders tr.row-new:hover td { background: #fef9c3; }
+table.orders tr.row-new:hover td.col-action { background: #fef9c3; }
+.new-dot { color: #f59e0b; margin-right: .35rem; font-size: .7rem; vertical-align: 1px; }
+
 /* Réglages de production (sur la fiche commande) */
 .reglage { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
   margin: .5rem 0 .75rem; padding: .5rem .7rem; border-radius: 8px; font-size: .85rem; }

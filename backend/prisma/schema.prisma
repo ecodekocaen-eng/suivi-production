@@ -61,6 +61,9 @@ model Commande {
   fichiersSupprimes   Boolean   @default(false)
   fichiersSupprimesAt DateTime?
 
+  // ── Première ouverture : null = jamais ouverte (surlignée dans le tableau) ──
+  ouverteAt DateTime?
+
   // ── Facturation ESAT : rattachement à un relevé (null = à facturer) ──
   releve    Releve?   @relation(fields: [releveId], references: [id])
   releveId  Int?

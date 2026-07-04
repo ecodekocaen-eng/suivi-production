@@ -112,6 +112,9 @@ export default function Dashboard() {
       <p className="muted">
         {data.total} commande(s){loading ? ' — chargement…' : ''}
         {!tousAffiches && ` · filtre : ${filters.statuts.map((s) => STATUT_LABELS[s]).join(', ')}`}
+        {data.items.some((c) => !c.ouverteAt && !c.supprime) && (
+          <span> · <span className="new-dot">●</span> jamais ouverte</span>
+        )}
       </p>
 
       <CommandeTable
