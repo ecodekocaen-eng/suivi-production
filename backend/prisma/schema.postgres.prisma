@@ -120,13 +120,14 @@ model Fichier {
 
 // Catalogue des produits (types de mug) géré par l'administrateur.
 model Produit {
-  id        Int      @id @default(autoincrement())
-  nom       String   @unique
-  prixAchat Float? // prix d'achat unitaire
-  image     String? // clé de stockage de la miniature
-  imageUrl  String? // URL publique (Vercel Blob) ; null en stockage disque
-  actif     Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  nom        String   @unique
+  prixAchat  Float? // prix d'achat unitaire
+  image      String? // clé de stockage de la miniature
+  imageUrl   String? // URL publique (Vercel Blob) ; null en stockage disque
+  actif      Boolean  @default(true)
+  compteMugs Boolean  @default(true) // false = accessoire (étiquette…) non compté dans la quantité de mugs
+  createdAt  DateTime @default(now())
 }
 
 // Relevé de facturation ESAT : groupe de commandes facturées ensemble.

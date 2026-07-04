@@ -74,11 +74,27 @@ export function getCommande(id) {
   });
 }
 
+// Noms (normalisés) des produits non comptés en mugs (étiquettes, accessoires…).
+async function typesNonComptes() {
+  const rows = await prisma.produit.findMany({
+    where: { compteMugs: false },
+    select: { nom: true },
+  });
+  return new Set(rows.map((r) => r.nom.trim().toUpperCase()));
+}
+
 // Dérive les champs d'en-tête (quantité totale, type, désignation) à partir des lignes,
 // pour que le tableau, la recherche et les stats restent cohérents.
-function deriveHeader(lignes) {
-  const quantite = lignes.reduce((s, l) => s + (l.quantite || 0), 0);
-  const types = [...new Set(lignes.map((l) => (l.typeMug || '').trim()).filter(Boolean))];
+// Les lignes de produits « non comptés » (étiquettes…) n'entrent ni dans la
+// quantité de mugs ni dans le type ; la désignation reflète toutes les lignes.
+function deriveHeader(lignes, exclus = new Set()) {
+  const compte = (l) => !exclus.has((l.typeMug || '').trim().toUpperCase());
+  const comptees = lignes.filter(compte);
+  // Si toutes les lignes sont des accessoires, on retombe sur l'ensemble.
+  const base = comptees.length > 0 ? comptees : lignes;
+
+  const quantite = comptees.reduce((s, l) => s + (l.quantite || 0), 0);
+  const types = [...new Set(base.map((l) => (l.typeMug || '').trim()).filter(Boolean))];
   const typeMug = types.length === 0 ? null : (types.length === 1 ? types[0] : 'MULTI');
   const designation = lignes.length === 1
     ? (lignes[0].visuel || '')
@@ -128,7 +144,9 @@ export async function nextReference() {
 export async function createCommande(data, userId, lignes = null) {
   const payload = { ...data, modifieParId: userId };
   // Si des lignes sont fournies, l'en-tête (quantité/type/désignation) en découle.
-  if (Array.isArray(lignes) && lignes.length > 0) Object.assign(payload, deriveHeader(lignes));
+  if (Array.isArray(lignes) && lignes.length > 0) {
+    Object.assign(payload, deriveHeader(lignes, await typesNonComptes()));
+  }
 
   // Référence automatique si non fournie.
   const refAuto = !payload.reference;
@@ -182,7 +200,7 @@ export async function updateCommande(id, data, userId, lignes = null) {
 
   // Si des lignes sont fournies, elles remplacent les précédentes et redéfinissent l'en-tête.
   const majLignes = Array.isArray(lignes);
-  if (majLignes && lignes.length > 0) Object.assign(data, deriveHeader(lignes));
+  if (majLignes && lignes.length > 0) Object.assign(data, deriveHeader(lignes, await typesNonComptes()));
 
   const commande = await prisma.commande.update({
     where: { id: Number(id) },

@@ -70,7 +70,7 @@ export default function Produits() {
         <div className="table-wrap no-clip">
           <table className="orders">
             <thead>
-              <tr><th>Miniature</th><th>Nom</th><th className="num">Prix d'achat</th><th>Actif</th><th>Actions</th></tr>
+              <tr><th>Miniature</th><th>Nom</th><th className="num">Prix d'achat</th><th>Actif</th><th>Compté en mugs</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {produits.map((p) => (
@@ -83,6 +83,9 @@ export default function Produits() {
                   <td className="strong">{p.nom}</td>
                   <td className="num">{p.prixAchat != null ? `${p.prixAchat} €` : '—'}</td>
                   <td>{p.actif ? '✅' : '🚫'}</td>
+                  <td title={p.compteMugs !== false ? 'Compté dans la quantité de mugs' : 'Accessoire : non compté dans la quantité de mugs'}>
+                    {p.compteMugs !== false ? '✅' : '➖ accessoire'}
+                  </td>
                   <td className="produit-actions">
                     <label className="btn btn-ghost btn-xs">
                       📷 Photo
@@ -96,6 +99,11 @@ export default function Produits() {
                     <button className={`btn btn-xs ${p.actif ? 'btn-ghost' : 'btn-primary'}`}
                             onClick={() => maj(p.id, { actif: !p.actif })}>
                       {p.actif ? 'Désactiver' : 'Activer'}
+                    </button>
+                    <button className="btn btn-ghost btn-xs"
+                            title="Un accessoire (étiquette…) n'est pas compté dans la quantité de mugs de la commande"
+                            onClick={() => maj(p.id, { compteMugs: !(p.compteMugs !== false) })}>
+                      {p.compteMugs !== false ? '➖ Accessoire' : '☕ Compter en mugs'}
                     </button>
                     <button className="btn btn-danger btn-xs" onClick={() => supprimer(p)}>Suppr.</button>
                   </td>

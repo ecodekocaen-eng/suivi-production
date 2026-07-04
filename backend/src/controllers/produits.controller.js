@@ -28,7 +28,16 @@ export async function createProduit(req, res) {
   if (req.file) { const r = await storeImage(req.file); image = r.key; imageUrl = r.url; }
 
   const produit = await prisma.produit.create({
-    data: { nom, prixAchat: parsePrice(req.body.prixAchat), image, imageUrl },
+    data: {
+      nom,
+      prixAchat: parsePrice(req.body.prixAchat),
+      image,
+      imageUrl,
+      // false = accessoire (étiquette…) non compté dans la quantité de mugs.
+      compteMugs: req.body.compteMugs === undefined
+        ? true
+        : req.body.compteMugs === 'true' || req.body.compteMugs === true,
+    },
   });
   res.status(201).json({ produit });
 }
@@ -42,6 +51,7 @@ export async function updateProduit(req, res) {
   if (req.body.nom !== undefined) data.nom = cleanStr(req.body.nom) || existing.nom;
   if (req.body.prixAchat !== undefined) data.prixAchat = parsePrice(req.body.prixAchat);
   if (req.body.actif !== undefined) data.actif = req.body.actif === 'true' || req.body.actif === true;
+  if (req.body.compteMugs !== undefined) data.compteMugs = req.body.compteMugs === 'true' || req.body.compteMugs === true;
 
   if (req.file) {
     const r = await storeImage(req.file);

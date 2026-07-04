@@ -23,13 +23,19 @@ export default function LignesEditor({ lignes, onChange, allowFiles = false }) {
   const ajouter = () => onChange([...lignes, ligneVide()]);
   const retirer = (i) => onChange(lignes.filter((_, idx) => idx !== i));
 
-  const total = lignes.reduce((s, l) => s + (parseInt(l.quantite, 10) || 0), 0);
+  // Les produits « non comptés » (étiquettes…) n'entrent pas dans le total de mugs.
+  const compte = (l) => byNom[l.typeMug]?.compteMugs !== false;
+  const total = lignes.filter(compte).reduce((s, l) => s + (parseInt(l.quantite, 10) || 0), 0);
+  const horsCompte = lignes.filter((l) => !compte(l)).reduce((s, l) => s + (parseInt(l.quantite, 10) || 0), 0);
 
   return (
     <div className="lignes-editor">
       <div className="lignes-head">
         <h3>Lignes (visuels / types de mug)</h3>
-        <span className="muted">Total : <strong>{total}</strong> mug(s)</span>
+        <span className="muted">
+          Total : <strong>{total}</strong> mug(s)
+          {horsCompte > 0 && <> · {horsCompte} accessoire(s) non compté(s)</>}
+        </span>
       </div>
 
       <div className="lignes-table">
