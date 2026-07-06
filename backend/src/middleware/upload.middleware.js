@@ -5,23 +5,30 @@
 // ─────────────────────────────────────────────────────────────
 import multer from 'multer';
 import { config } from '../config.js';
-import { ALLOWED_MIME_TYPES } from '../constants.js';
+import { ALLOWED_MIME_TYPES, DOCUMENT_MIME_TYPES } from '../constants.js';
 
 const storage = multer.memoryStorage();
 
-function fileFilter(req, file, cb) {
-  if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+const mimeFilter = (types) => (req, file, cb) => {
+  if (types.includes(file.mimetype)) {
     cb(null, true);
   } else {
     const err = new Error(`Type de fichier non autorisé : ${file.mimetype}`);
     err.status = 400;
     cb(err);
   }
-}
+};
 
 export const upload = multer({
   storage,
-  fileFilter,
+  fileFilter: mimeFilter(ALLOWED_MIME_TYPES),
+  limits: { fileSize: config.maxFileSize },
+});
+
+// Documents (bons de commande, rendus 3D…) : types élargis (Word/Excel/CSV).
+export const docUpload = multer({
+  storage,
+  fileFilter: mimeFilter(DOCUMENT_MIME_TYPES),
   limits: { fileSize: config.maxFileSize },
 });
 

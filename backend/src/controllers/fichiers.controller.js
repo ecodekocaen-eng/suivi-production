@@ -37,6 +37,19 @@ export async function upload(req, res) {
   res.status(201).json({ fichiers: created });
 }
 
+// Upload de documents (bons de commande, rendus 3D…).
+// Autorisé même après expédition : ce sont des pièces administratives,
+// conservées (jamais purgées automatiquement).
+export async function uploadDocuments(req, res) {
+  const commande = await loadCommande(req, res);
+  if (!commande) return;
+  const created = [];
+  for (const file of req.files || []) {
+    created.push(await fichiersService.recordFichier(commande.id, file, req.user.id, null, 'DOCUMENT'));
+  }
+  res.status(201).json({ fichiers: created });
+}
+
 // Upload de visuels rattachés à une ligne précise.
 export async function uploadLigne(req, res) {
   const commande = await loadCommande(req, res);
@@ -87,11 +100,13 @@ export async function download(req, res) {
   }
 }
 
-// Téléchargement groupé (.zip).
+// Téléchargement groupé (.zip) — visuels uniquement (destiné à la production).
 export async function downloadZip(req, res) {
   const commande = await loadCommande(req, res);
   if (!commande) return;
-  const fichiers = await prisma.fichier.findMany({ where: { commandeId: commande.id } });
+  const fichiers = await prisma.fichier.findMany({
+    where: { commandeId: commande.id, categorie: 'VISUEL' },
+  });
 
   res.attachment(`commande_${commande.id}_visuels.zip`);
   const archive = archiver('zip', { zlib: { level: 9 } });

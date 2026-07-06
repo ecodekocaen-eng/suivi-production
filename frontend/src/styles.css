@@ -323,6 +323,16 @@ label.full { margin-top: 1rem; }
   .card.releve-doc { border: none; box-shadow: none; padding: 0; max-width: none; }
 }
 
+/* Documents de commande (bons de commande, rendus 3D…) */
+.doc-list { list-style: none; margin: 0; padding: 0; }
+.doc-row { display: flex; align-items: center; gap: .6rem; padding: .45rem .2rem;
+  border-bottom: 1px solid var(--border); }
+.doc-row:last-child { border-bottom: none; }
+.doc-icon { font-size: 1.1rem; }
+.doc-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-meta { font-size: .8rem; white-space: nowrap; }
+.doc-actions { display: flex; gap: .3rem; }
+
 /* Commandes jamais ouvertes : surlignées jusqu'à leur première ouverture */
 table.orders tr.row-new td { background: #fefce8; }
 table.orders tr.row-new td.col-action { background: #fefce8; }

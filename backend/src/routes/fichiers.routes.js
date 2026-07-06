@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireProduction } from '../middleware/role.middleware.js';
-import { upload as uploadMw } from '../middleware/upload.middleware.js';
+import { upload as uploadMw, docUpload } from '../middleware/upload.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import * as f from '../controllers/fichiers.controller.js';
 
@@ -14,6 +14,8 @@ const router = Router({ mergeParams: true });
 router.use(requireAuth, requireProduction);
 
 router.post('/', uploadMw.array('files', 20), asyncHandler(f.upload));
+// Documents (bons de commande, rendus 3D…) : types élargis, jamais purgés.
+router.post('/documents', docUpload.array('files', 20), asyncHandler(f.uploadDocuments));
 // Upload ciblant une ligne : /api/commandes/:id/fichiers/ligne/:ligneId
 router.post('/ligne/:ligneId', uploadMw.array('files', 20), asyncHandler(f.uploadLigne));
 router.get('/zip', asyncHandler(f.downloadZip));

@@ -113,6 +113,7 @@ model Fichier {
   url         String? // URL publique (Vercel Blob) ; null en stockage disque
   taille      Int
   type        String // type MIME
+  categorie   String   @default("VISUEL") // VISUEL (purgé après expédition) | DOCUMENT (conservé)
   createdAt   DateTime @default(now())
 
   commande   Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)

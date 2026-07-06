@@ -12,6 +12,7 @@ import UploadZone from '../components/UploadZone.jsx';
 import LignesEditor from '../components/LignesEditor.jsx';
 import Thumb from '../components/Thumb.jsx';
 import ReglageLigne from '../components/ReglageLigne.jsx';
+import DocumentsList from '../components/DocumentsList.jsx';
 import { fmtDate, fmtDateTime, fmtNumber } from '../format.js';
 
 // Clé de correspondance d'un visuel (identique à la normalisation backend).
@@ -49,10 +50,13 @@ export default function CommandeDetail() {
   const { commande, logs } = data;
   const reglages = data.reglages || {};
 
-  // Regroupe les visuels par ligne (et ceux non rattachés à une ligne).
+  // Sépare documents (bons de commande, rendus 3D…) et visuels,
+  // puis regroupe les visuels par ligne (et ceux non rattachés à une ligne).
+  const documents = commande.fichiers.filter((f) => f.categorie === 'DOCUMENT');
+  const visuels = commande.fichiers.filter((f) => f.categorie !== 'DOCUMENT');
   const filesByLigne = {};
   const filesGeneral = [];
-  for (const f of commande.fichiers) {
+  for (const f of visuels) {
     if (f.ligneId) (filesByLigne[f.ligneId] ||= []).push(f);
     else filesGeneral.push(f);
   }
@@ -218,8 +222,8 @@ export default function CommandeDetail() {
       {/* Visuels */}
       <div className="card" id="visuels">
         <div className="card-head">
-          <h2>Visuels ({commande.fichiers.length})</h2>
-          {commande.fichiers.length > 0 && (
+          <h2>Visuels ({visuels.length})</h2>
+          {visuels.length > 0 && (
             <a className="btn btn-primary btn-sm" href={`/api/commandes/${commande.id}/fichiers/zip`}>
               ⬇ Tout télécharger (zip)
             </a>
@@ -275,7 +279,7 @@ export default function CommandeDetail() {
           <>
             {/* Commande sans lignes : visuels au niveau commande */}
             <ReglageLigne visuel={commande.designation} reglage={reglages[normVisuel(commande.designation)]} onSaved={load} />
-            <GalerieVisuels commandeId={commande.id} fichiers={commande.fichiers} onChange={load} showZip={false} />
+            <GalerieVisuels commandeId={commande.id} fichiers={visuels} onChange={load} showZip={false} />
             {!expediee && (
               <div style={{ marginTop: '1rem' }}>
                 <UploadZone commandeId={commande.id} onUploaded={load} />
@@ -283,6 +287,18 @@ export default function CommandeDetail() {
             )}
           </>
         )}
+      </div>
+
+      {/* Documents (bons de commande, rendus 3D…) */}
+      <div className="card">
+        <div className="card-head">
+          <h2>Documents ({documents.length})</h2>
+          <span className="muted small">Bons de commande, rendus 3D… — conservés, jamais supprimés automatiquement</span>
+        </div>
+        <DocumentsList commandeId={commande.id} fichiers={documents} onChange={load} />
+        <div style={{ marginTop: '.75rem' }}>
+          <UploadZone commandeId={commande.id} onUploaded={load} categorie="document" compact />
+        </div>
       </div>
 
       {/* Historique */}

@@ -11,11 +11,13 @@ import { saveBuffer, deleteByKey, deletePrefix, makeFilename } from '../storage.
 
 // Enregistre un fichier (buffer multer) : stockage + métadonnées + log.
 // ligneId : rattache le visuel à une ligne précise (optionnel).
-export async function recordFichier(commandeId, file, userId, ligneId = null) {
+// categorie DOCUMENT (bon de commande, rendu 3D…) : stocké sous un préfixe
+// séparé (documents/…) pour échapper à la purge des visuels à l'expédition.
+export async function recordFichier(commandeId, file, userId, ligneId = null, categorie = 'VISUEL') {
   const filename = makeFilename(file.originalname);
-  const subdir = ligneId
-    ? `commande_${commandeId}/ligne_${ligneId}`
-    : `commande_${commandeId}`;
+  const subdir = categorie === 'DOCUMENT'
+    ? `documents/commande_${commandeId}`
+    : (ligneId ? `commande_${commandeId}/ligne_${ligneId}` : `commande_${commandeId}`);
   const { key, url } = await saveBuffer(file.buffer, {
     subdir, filename, contentType: file.mimetype,
   });
@@ -28,13 +30,14 @@ export async function recordFichier(commandeId, file, userId, ligneId = null) {
       url,
       taille: file.size,
       type: file.mimetype,
+      categorie,
       commandeId,
       ligneId,
     },
   });
   await addLog({
     action: LOG_ACTIONS.FICHIER_AJOUTE,
-    detail: `Ajout du visuel « ${file.originalname} »`,
+    detail: `Ajout du ${categorie === 'DOCUMENT' ? 'document' : 'visuel'} « ${file.originalname} »`,
     userId,
     commandeId,
   });
@@ -49,13 +52,13 @@ export function getAttachment(id) {
   return prisma.fichier.findUnique({ where: { id: Number(id) } });
 }
 
-// Supprime un visuel : stockage + base + log.
+// Supprime un fichier (visuel ou document) : stockage + base + log.
 export async function deleteFichier(fichier, userId) {
   await deleteByKey(fichier.chemin, fichier.url);
   await prisma.fichier.delete({ where: { id: fichier.id } });
   await addLog({
     action: LOG_ACTIONS.FICHIER_SUPPRIME,
-    detail: `Suppression du visuel « ${fichier.nom} »`,
+    detail: `Suppression du ${fichier.categorie === 'DOCUMENT' ? 'document' : 'visuel'} « ${fichier.nom} »`,
     userId,
     commandeId: fichier.commandeId,
   });
@@ -69,12 +72,14 @@ export async function deleteFichiersForLigne(ligneId, userId) {
 }
 
 // ── Purge automatique à l'expédition ──
+// Ne concerne QUE les visuels : les documents (bons de commande, rendus 3D…)
+// sont conservés (stockés sous documents/…, hors du préfixe purgé).
 export async function purgeFichiers(commandeId, userId) {
-  const count = await prisma.fichier.count({ where: { commandeId } });
+  const count = await prisma.fichier.count({ where: { commandeId, categorie: 'VISUEL' } });
 
-  // Supprime tout le préfixe de la commande (toutes ses lignes incluses).
+  // Supprime tout le préfixe visuels de la commande (toutes ses lignes incluses).
   await deletePrefix(`commande_${commandeId}`);
-  await prisma.fichier.deleteMany({ where: { commandeId } });
+  await prisma.fichier.deleteMany({ where: { commandeId, categorie: 'VISUEL' } });
 
   const now = new Date();
   await prisma.commande.update({
@@ -86,8 +91,8 @@ export async function purgeFichiers(commandeId, userId) {
   await addLog({
     action: LOG_ACTIONS.FICHIERS_SUPPRIMES,
     detail: count > 0
-      ? `${count} fichier(s) supprimé(s) automatiquement le ${dateStr} (rétention ${config.retentionDays} j après expédition)`
-      : `Nettoyage le ${dateStr} : aucun fichier à supprimer`,
+      ? `${count} visuel(s) supprimé(s) automatiquement le ${dateStr} (rétention ${config.retentionDays} j après expédition) — documents conservés`
+      : `Nettoyage le ${dateStr} : aucun visuel à supprimer`,
     userId,
     commandeId,
   });

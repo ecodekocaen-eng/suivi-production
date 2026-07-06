@@ -29,13 +29,24 @@ export const STATUT_EXPEDIEE = 'Expédié';
 // facturation (jamais au prix de vente ni à la marge).
 export const ROLES = ['ADMIN', 'OPERATEUR', 'COMPTABLE'];
 
-// Types MIME autorisés à l'upload (images + PDF).
+// Types MIME autorisés à l'upload des visuels (images + PDF).
 export const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
   'application/pdf',
+];
+
+// Types MIME autorisés pour les documents (bons de commande, rendus 3D…) :
+// visuels + Word / Excel / CSV.
+export const DOCUMENT_MIME_TYPES = [
+  ...ALLOWED_MIME_TYPES,
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
 ];
 
 // Actions tracées dans les logs.
