@@ -18,12 +18,18 @@ import Users from './pages/Users.jsx';
 // Page d'accueil selon le rôle.
 const homeFor = (user) => (user?.role === 'COMPTABLE' ? '/facturation' : '/');
 
-// N'autorise l'accès qu'aux rôles listés (par défaut : rôles de production).
-function Protected({ children, roles = ['ADMIN', 'OPERATEUR'] }) {
+// Accès au module facturation : ADMIN, COMPTABLE, ou option par compte.
+const peutFacturer = (user) =>
+  user?.role === 'ADMIN' || user?.role === 'COMPTABLE' || user?.accesFacturation;
+
+// N'autorise l'accès qu'aux rôles listés (par défaut : rôles de production),
+// ou selon un prédicat `allow` (prioritaire s'il est fourni).
+function Protected({ children, roles = ['ADMIN', 'OPERATEUR'], allow = null }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="center muted">Chargement…</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (!roles.includes(user.role)) return <Navigate to={homeFor(user)} replace />;
+  const autorise = allow ? allow(user) : roles.includes(user.role);
+  if (!autorise) return <Navigate to={homeFor(user)} replace />;
   return <Layout>{children}</Layout>;
 }
 
@@ -43,7 +49,7 @@ function Layout({ children }) {
           {!isComptable && <Link to="/">Tableau</Link>}
           {!isComptable && <Link to="/reglages">Réglages</Link>}
           {!isComptable && <Link to="/statistiques">Statistiques</Link>}
-          {(isAdmin || isComptable) && <Link to="/facturation">Facturation</Link>}
+          {peutFacturer(user) && <Link to="/facturation">Facturation</Link>}
           {isAdmin && <Link to="/clients">Clients</Link>}
           {isAdmin && <Link to="/produits">Produits</Link>}
           {isAdmin && <Link to="/utilisateurs">Utilisateurs</Link>}
@@ -56,8 +62,6 @@ function Layout({ children }) {
   );
 }
 
-const FACTU = ['ADMIN', 'COMPTABLE'];
-
 export default function App() {
   return (
     <Routes>
@@ -66,8 +70,8 @@ export default function App() {
       <Route path="/commandes/:id" element={<Protected><CommandeDetail /></Protected>} />
       <Route path="/reglages" element={<Protected><Reglages /></Protected>} />
       <Route path="/statistiques" element={<Protected><Stats /></Protected>} />
-      <Route path="/facturation" element={<Protected roles={FACTU}><Facturation /></Protected>} />
-      <Route path="/facturation/releves/:id" element={<Protected roles={FACTU}><ReleveDetail /></Protected>} />
+      <Route path="/facturation" element={<Protected allow={peutFacturer}><Facturation /></Protected>} />
+      <Route path="/facturation/releves/:id" element={<Protected allow={peutFacturer}><ReleveDetail /></Protected>} />
       <Route path="/clients" element={<Protected roles={['ADMIN']}><Clients /></Protected>} />
       <Route path="/produits" element={<Protected roles={['ADMIN']}><Produits /></Protected>} />
       <Route path="/utilisateurs" element={<Protected roles={['ADMIN']}><Users /></Protected>} />

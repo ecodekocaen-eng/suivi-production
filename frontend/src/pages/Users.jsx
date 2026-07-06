@@ -79,7 +79,7 @@ export default function Users() {
         <div className="table-wrap">
           <table className="orders">
             <thead>
-              <tr><th>Email</th><th>Nom</th><th>Rôle</th><th>Actif</th><th>Créé le</th><th>Actions</th></tr>
+              <tr><th>Email</th><th>Nom</th><th>Rôle</th><th>Facturation</th><th>Actif</th><th>Créé le</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {users.map((u) => {
@@ -95,6 +95,17 @@ export default function Users() {
                         <option value="COMPTABLE">Comptable</option>
                         <option value="ADMIN">Admin</option>
                       </select>
+                    </td>
+                    <td>
+                      {u.role === 'ADMIN' || u.role === 'COMPTABLE'
+                        ? <span className="muted" title="Accès inclus dans le rôle">incluse</span>
+                        : (
+                          <button className={`btn btn-xs ${u.accesFacturation ? 'btn-primary' : 'btn-ghost'}`}
+                                  title="Donner / retirer l'accès au module facturation"
+                                  onClick={() => majUser(u.id, { accesFacturation: !u.accesFacturation })}>
+                            {u.accesFacturation ? '✅ oui' : 'non'}
+                          </button>
+                        )}
                     </td>
                     <td>{u.actif ? '✅' : '🚫'}</td>
                     <td>{fmtDate(u.createdAt)}</td>

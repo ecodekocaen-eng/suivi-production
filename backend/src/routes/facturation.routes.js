@@ -1,15 +1,15 @@
 // ─────────────────────────────────────────────────────────────
-//  Routes de la facturation ESAT — réservées aux rôles ADMIN et
-//  COMPTABLE (le compte dédié de la comptable de l'ESAT).
+//  Routes de la facturation ESAT — ADMIN, COMPTABLE, ou compte
+//  disposant de l'option « accès facturation ».
 // ─────────────────────────────────────────────────────────────
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { requireRole } from '../middleware/role.middleware.js';
+import { requireFacturation } from '../middleware/role.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import * as f from '../controllers/facturation.controller.js';
 
 const router = Router();
-router.use(requireAuth, requireRole('ADMIN', 'COMPTABLE'));
+router.use(requireAuth, requireFacturation);
 
 router.get('/commandes', asyncHandler(f.aFacturer));
 router.post('/exclure', asyncHandler(f.exclure));

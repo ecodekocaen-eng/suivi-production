@@ -6,7 +6,10 @@ import { prisma } from '../prisma.js';
 import { ROLES, LOG_ACTIONS, USER_LOG_ACTIONS } from '../constants.js';
 import { addLog, getUserAuditLogs } from '../services/log.service.js';
 
-const publicSelect = { id: true, email: true, nom: true, role: true, actif: true, createdAt: true };
+const publicSelect = {
+  id: true, email: true, nom: true, role: true, actif: true,
+  accesFacturation: true, createdAt: true,
+};
 
 export async function listUsers(req, res) {
   const users = await prisma.user.findMany({ select: publicSelect, orderBy: { createdAt: 'asc' } });
@@ -53,13 +56,17 @@ export async function createUser(req, res) {
 // Mise à jour : nom, rôle, activation, et mot de passe (optionnel).
 export async function updateUser(req, res) {
   const id = Number(req.params.id);
-  const { nom, role, actif, password } = req.body;
+  const { nom, role, actif, accesFacturation, password } = req.body;
 
   const data = {};
   const changements = [];
   if (nom !== undefined) { data.nom = String(nom).trim(); changements.push('nom'); }
   if (role !== undefined && ROLES.includes(role)) { data.role = role; changements.push(`rôle → ${role}`); }
   if (actif !== undefined) { data.actif = Boolean(actif); changements.push(data.actif ? 'activé' : 'désactivé'); }
+  if (accesFacturation !== undefined) {
+    data.accesFacturation = Boolean(accesFacturation);
+    changements.push(data.accesFacturation ? 'accès facturation activé' : 'accès facturation retiré');
+  }
   if (password) {
     if (password.length < 6) return res.status(400).json({ error: 'Mot de passe trop court (min. 6).' });
     data.password = bcrypt.hashSync(password, 12);

@@ -22,13 +22,14 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  nom       String
-  role      String   @default("OPERATEUR") // ADMIN | OPERATEUR
-  actif     Boolean  @default(true)         // compte désactivable par un ADMIN
-  createdAt DateTime @default(now())
+  id               Int      @id @default(autoincrement())
+  email            String   @unique
+  password         String
+  nom              String
+  role             String   @default("OPERATEUR") // ADMIN | OPERATEUR | COMPTABLE
+  actif            Boolean  @default(true)         // compte désactivable par un ADMIN
+  accesFacturation Boolean  @default(false) // accès au module facturation en plus du rôle
+  createdAt        DateTime @default(now())
 
   commandesModifiees Commande[] @relation("ModifiePar")
   logs               Log[]

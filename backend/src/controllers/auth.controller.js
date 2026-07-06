@@ -30,7 +30,12 @@ export async function login(req, res) {
     expiresIn: config.jwtExpiresIn,
   });
   res.cookie('token', token, cookieOptions());
-  res.json({ user: { id: user.id, email: user.email, nom: user.nom, role: user.role } });
+  res.json({
+    user: {
+      id: user.id, email: user.email, nom: user.nom, role: user.role,
+      accesFacturation: user.accesFacturation,
+    },
+  });
 }
 
 export function logout(req, res) {

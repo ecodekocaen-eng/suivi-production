@@ -18,7 +18,10 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Compte introuvable ou désactivé.' });
     }
 
-    req.user = { id: user.id, email: user.email, nom: user.nom, role: user.role };
+    req.user = {
+      id: user.id, email: user.email, nom: user.nom, role: user.role,
+      accesFacturation: user.accesFacturation,
+    };
     next();
   } catch {
     return res.status(401).json({ error: 'Session invalide ou expirée.' });
