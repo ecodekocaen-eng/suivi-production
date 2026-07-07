@@ -11,7 +11,13 @@ import { LineChart, HBars, Donut } from '../components/Charts.jsx';
 import { exportStatsCsv } from '../csv.js';
 import StatutBadge from '../components/StatutBadge.jsx';
 
-const PERIODES = { tout: 'Tout l’historique', '12m': '12 derniers mois', annee: 'Cette année' };
+const PERIODES = {
+  tout: 'Tout l’historique',
+  mois: 'Mois en cours',
+  annee: 'Du 1er janvier à aujourd’hui',
+  '12m': '12 derniers mois',
+  perso: 'De date à date…',
+};
 
 const STATUT_COLORS = {
   'En attente': '#888780',
@@ -41,13 +47,57 @@ export default function Stats() {
   const [data, setData] = useState(null);
   const [metric, setMetric] = useState('quantite');
   const [periode, setPeriode] = useState('tout');
+  const [debut, setDebut] = useState('');
+  const [fin, setFin] = useState('');
+
+  // « De date à date » : on attend que les deux dates soient choisies.
+  const persoIncomplet = periode === 'perso' && (!debut || !fin);
 
   useEffect(() => {
+    if (periode === 'perso' && (!debut || !fin)) return;
     setData(null);
-    api.get(`/stats?periode=${periode}`).then(setData);
-  }, [periode]);
+    const qs = periode === 'perso'
+      ? `periode=perso&debut=${debut}&fin=${fin}`
+      : `periode=${periode}`;
+    api.get(`/stats?${qs}`).then(setData);
+  }, [periode, debut, fin]);
 
-  if (!data) return <p className="muted">Chargement des statistiques…</p>;
+  const periodeLabel = periode === 'perso'
+    ? `Du ${fmtDate(debut)} au ${fmtDate(fin)}`
+    : PERIODES[periode];
+
+  const toolbar = (
+    <div className="stats-toolbar">
+      <select value={periode} onChange={(e) => setPeriode(e.target.value)}>
+        {Object.entries(PERIODES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+      {periode === 'perso' && (
+        <span className="stats-dates">
+          <input type="date" value={debut} max={fin || undefined} onChange={(e) => setDebut(e.target.value)} />
+          <span className="muted">→</span>
+          <input type="date" value={fin} min={debut || undefined} onChange={(e) => setFin(e.target.value)} />
+        </span>
+      )}
+      <button className="btn btn-primary btn-sm" disabled={!data}
+              onClick={() => data && exportStatsCsv(data, periodeLabel)}>
+        ⬇ Exporter (CSV)
+      </button>
+    </div>
+  );
+
+  if (!data) {
+    return (
+      <>
+        <div className="page-head">
+          <h1 className="page-title">Statistiques</h1>
+          {toolbar}
+        </div>
+        <p className="muted">
+          {persoIncomplet ? 'Choisissez une date de début et une date de fin.' : 'Chargement des statistiques…'}
+        </p>
+      </>
+    );
+  }
 
   const { kpis, deltas, marge, parStatut, parMois, charge, topClients, typesMug, ateliers, retards } = data;
 
@@ -70,14 +120,7 @@ export default function Stats() {
     <>
       <div className="page-head">
         <h1 className="page-title">Statistiques</h1>
-        <div className="stats-toolbar">
-          <select value={periode} onChange={(e) => setPeriode(e.target.value)}>
-            {Object.entries(PERIODES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          <button className="btn btn-primary btn-sm" onClick={() => exportStatsCsv(data, PERIODES[periode])}>
-            ⬇ Exporter (CSV)
-          </button>
-        </div>
+        {toolbar}
       </div>
 
       {/* KPIs */}

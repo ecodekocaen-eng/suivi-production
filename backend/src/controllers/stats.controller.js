@@ -6,9 +6,17 @@ import { STATUTS, STATUT_EXPEDIEE } from '../constants.js';
 
 function debutPeriode(periode) {
   const now = new Date();
+  if (periode === 'mois') return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   if (periode === '12m') { const d = new Date(now); d.setMonth(d.getMonth() - 12); return d; }
   if (periode === 'annee') return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   return null;
+}
+
+// Date "YYYY-MM-DD" → Date UTC (début ou fin de journée), ou null.
+function parseJour(value, finDeJournee = false) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}T${finDeJournee ? '23:59:59.999' : '00:00:00.000'}Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 const moisKey = (d) => {
@@ -18,8 +26,15 @@ const moisKey = (d) => {
 
 export async function stats(req, res) {
   const periode = req.query.periode || 'tout';
-  const debut = debutPeriode(periode);
   const now = new Date();
+  // Période personnalisée (de date à date) : bornes fournies en query.
+  let debut; let fin = null;
+  if (periode === 'perso') {
+    debut = parseJour(req.query.debut);
+    fin = parseJour(req.query.fin, true);
+  } else {
+    debut = debutPeriode(periode);
+  }
 
   const commandes = await prisma.commande.findMany({
     where: { supprime: false },
@@ -45,8 +60,16 @@ export async function stats(req, res) {
   const parMois = [...moisMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     .map(([mois, v]) => ({ mois, ...v }));
 
-  // ── Sous-ensemble filtré par période ──
-  const inPeriod = debut ? commandes.filter((c) => c.dateCommande && new Date(c.dateCommande) >= debut) : commandes;
+  // ── Sous-ensemble filtré par période (borne de fin incluse si fournie) ──
+  const dansPeriode = (c) => {
+    if (!debut && !fin) return true;
+    if (!c.dateCommande) return false;
+    const d = new Date(c.dateCommande);
+    if (debut && d < debut) return false;
+    if (fin && d > fin) return false;
+    return true;
+  };
+  const inPeriod = commandes.filter(dansPeriode);
 
   let quantiteTotale = 0; let rebutTotal = 0; let coutAchat = 0;
   const clients = new Set();
@@ -95,7 +118,8 @@ export async function stats(req, res) {
   // ── Deltas vs période précédente de même durée ──
   let deltas = null;
   if (debut) {
-    const prevDebut = new Date(debut.getTime() - (now - debut));
+    const finEff = fin || now;
+    const prevDebut = new Date(debut.getTime() - (finEff - debut));
     let pM = 0; let pC = 0; let pCout = 0;
     for (const c of commandes) {
       if (!c.dateCommande) continue;
