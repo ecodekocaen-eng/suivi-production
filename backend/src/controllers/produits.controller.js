@@ -81,6 +81,12 @@ export async function deleteProduit(req, res) {
 export async function produitImage(req, res) {
   const produit = await prisma.produit.findUnique({ where: { id: Number(req.params.id) } });
   if (!produit || !produit.image) return res.status(404).json({ error: 'Image introuvable.' });
+  // L'URL /produits/:id/image est stable mais l'image peut être remplacée :
+  // cache court + ETag sur la clé de stockage (qui change à chaque remplacement).
+  const etag = `"${produit.image}"`;
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.setHeader('ETag', etag);
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
   try {
     const buf = await readBuffer({ key: produit.image, url: produit.imageUrl });
     res.type('image/*');

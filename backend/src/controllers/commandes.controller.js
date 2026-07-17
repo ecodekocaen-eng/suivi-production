@@ -67,19 +67,22 @@ function masquerMarge(commande, role) {
 
 export async function index(req, res) {
   const statuts = (req.query.statut || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const result = await service.listCommandes({
-    search: req.query.search,
-    statuts,
-    livraisonDebut: req.query.livraisonDebut,
-    livraisonFin: req.query.livraisonFin,
-    page: req.query.page,
-    pageSize: req.query.pageSize,
-    sortBy: req.query.sortBy,
-    sortDir: req.query.sortDir,
-    // Seul un ADMIN peut voir la corbeille.
-    inclureSupprimees: req.user.role === 'ADMIN' && req.query.inclureSupprimees === 'true',
-  });
-  const counts = await service.countByStatut();
+  // Liste et compteurs par statut sont indépendants → en parallèle.
+  const [result, counts] = await Promise.all([
+    service.listCommandes({
+      search: req.query.search,
+      statuts,
+      livraisonDebut: req.query.livraisonDebut,
+      livraisonFin: req.query.livraisonFin,
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      sortBy: req.query.sortBy,
+      sortDir: req.query.sortDir,
+      // Seul un ADMIN peut voir la corbeille.
+      inclureSupprimees: req.user.role === 'ADMIN' && req.query.inclureSupprimees === 'true',
+    }),
+    service.countByStatut(),
+  ]);
   result.items = result.items.map((c) => masquerMarge(c, req.user.role));
   res.json({ ...result, counts });
 }

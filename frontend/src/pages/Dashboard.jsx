@@ -23,6 +23,16 @@ export default function Dashboard() {
     sortBy: 'dateCommande', sortDir: 'desc', inclureSupprimees: false,
   });
 
+  // Champ de recherche découplé du filtre : anti-rebond de 350 ms pour ne
+  // lancer qu'une requête une fois la frappe terminée (au lieu d'une par touche).
+  const [searchInput, setSearchInput] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFilters((f) => (f.search === searchInput ? f : { ...f, search: searchInput, page: 1 }));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const load = useCallback(async () => {
     setLoading(true);
     const qs = new URLSearchParams();
@@ -93,8 +103,8 @@ export default function Dashboard() {
       <div className="filters">
         <input
           type="search" placeholder="Rechercher (référence, client, désignation…)"
-          value={filters.search}
-          onChange={(e) => setField('search', e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
         <span className="filter-presets">
           <button className="btn btn-ghost btn-sm" onClick={() => setField('statuts', DEFAUT_STATUTS)}>Actifs</button>

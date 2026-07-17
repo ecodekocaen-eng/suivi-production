@@ -43,16 +43,19 @@ export async function usageByVisuel() {
     if (!prev || new Date(date) > new Date(prev.date)) map.set(cle, { reference, date });
   };
 
-  const cmds = await prisma.commande.findMany({
-    where: { supprime: false },
-    select: { designation: true, reference: true, dateCommande: true },
-  });
+  // Les deux lectures sont indépendantes → en parallèle (une seule latence).
+  const [cmds, lignes] = await Promise.all([
+    prisma.commande.findMany({
+      where: { supprime: false },
+      select: { designation: true, reference: true, dateCommande: true },
+    }),
+    prisma.ligneCommande.findMany({
+      where: { commande: { supprime: false } },
+      select: { visuel: true, commande: { select: { reference: true, dateCommande: true } } },
+    }),
+  ]);
+  // On traite les en-têtes d'abord (comportement identique : > strict, 1er gardé à date égale).
   for (const c of cmds) consider(c.designation, c.reference, c.dateCommande);
-
-  const lignes = await prisma.ligneCommande.findMany({
-    where: { commande: { supprime: false } },
-    select: { visuel: true, commande: { select: { reference: true, dateCommande: true } } },
-  });
   for (const l of lignes) consider(l.visuel, l.commande.reference, l.commande.dateCommande);
 
   return map;

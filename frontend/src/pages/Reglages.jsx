@@ -11,10 +11,18 @@ const emptyForm = { visuel: '', temperature: '', tempsSecondes: '', note: '' };
 
 export default function Reglages() {
   const [reglages, setReglages] = useState([]);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState(null);
+
+  // Anti-rebond : la recherche (qui interroge la base) n'est lancée que
+  // 350 ms après la dernière frappe.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const load = useCallback(async () => {
     const qs = search ? `?search=${encodeURIComponent(search)}` : '';
@@ -89,8 +97,8 @@ export default function Reglages() {
       <div className="card">
         <div className="card-head">
           <h2>Bibliothèque ({reglages.length})</h2>
-          <input type="search" placeholder="Rechercher un visuel…" value={search}
-                 onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: 260 }} />
+          <input type="search" placeholder="Rechercher un visuel…" value={searchInput}
+                 onChange={(e) => setSearchInput(e.target.value)} style={{ maxWidth: 260 }} />
         </div>
         <div className="table-wrap no-clip">
           <table className="orders">

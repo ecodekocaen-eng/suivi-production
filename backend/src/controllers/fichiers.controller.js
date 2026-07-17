@@ -15,11 +15,12 @@ async function loadCommande(req, res) {
   return commande;
 }
 
-async function loadFichier(req, res, commande) {
-  const fichier = await prisma.fichier.findUnique({ where: { id: Number(req.params.fileId) } });
-  if (!fichier || fichier.commandeId !== commande.id) {
-    res.status(404).json({ error: 'Fichier introuvable.' }); return null;
-  }
+// Charge un fichier en vérifiant l'appartenance à la commande en UNE requête.
+async function loadFichierDirect(req, res) {
+  const fichier = await prisma.fichier.findFirst({
+    where: { id: Number(req.params.fileId), commandeId: Number(req.params.id) },
+  });
+  if (!fichier) { res.status(404).json({ error: 'Fichier introuvable.' }); return null; }
   return fichier;
 }
 
@@ -68,12 +69,20 @@ export async function uploadLigne(req, res) {
   res.status(201).json({ fichiers: created });
 }
 
+// Le contenu d'un fichier est immuable (clé de stockage unique, jamais
+// remplacé) : on autorise un cache navigateur long et un 304 sans relire le Blob.
+function cacheFichier(res, fichier) {
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  res.setHeader('ETag', `"${fichier.nomStockage}"`);
+}
+
 // Aperçu inline (miniatures).
 export async function view(req, res) {
-  const commande = await loadCommande(req, res);
-  if (!commande) return;
-  const fichier = await loadFichier(req, res, commande);
+  const fichier = await loadFichierDirect(req, res);
   if (!fichier) return;
+  cacheFichier(res, fichier);
+  // Revalidation : si le navigateur a déjà la bonne version, on évite la lecture du Blob.
+  if (req.headers['if-none-match'] === `"${fichier.nomStockage}"`) return res.status(304).end();
   try {
     const buf = await readBuffer({ key: fichier.chemin, url: fichier.url });
     res.type(fichier.type || 'application/octet-stream');
@@ -85,10 +94,10 @@ export async function view(req, res) {
 
 // Téléchargement individuel.
 export async function download(req, res) {
-  const commande = await loadCommande(req, res);
-  if (!commande) return;
-  const fichier = await loadFichier(req, res, commande);
+  const fichier = await loadFichierDirect(req, res);
   if (!fichier) return;
+  cacheFichier(res, fichier);
+  if (req.headers['if-none-match'] === `"${fichier.nomStockage}"`) return res.status(304).end();
   try {
     const buf = await readBuffer({ key: fichier.chemin, url: fichier.url });
     const safe = (fichier.nom || 'fichier').replace(/"/g, '');
@@ -125,9 +134,7 @@ export async function downloadZip(req, res) {
 
 // Suppression d'un visuel.
 export async function remove(req, res) {
-  const commande = await loadCommande(req, res);
-  if (!commande) return;
-  const fichier = await loadFichier(req, res, commande);
+  const fichier = await loadFichierDirect(req, res);
   if (!fichier) return;
   await fichiersService.deleteFichier(fichier, req.user.id);
   res.json({ ok: true });

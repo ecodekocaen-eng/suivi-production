@@ -256,7 +256,9 @@ export async function updateCommande(id, data, userId, lignes = null) {
     });
   }
 
-  return prisma.commande.findUnique({ where: { id: Number(id) } });
+  // prisma.commande.update ci-dessus renvoie déjà la ligne à jour ; les
+  // opérations sur les lignes ne modifient pas l'en-tête → pas de relecture.
+  return commande;
 }
 
 // Soft delete (réservé ADMIN).
