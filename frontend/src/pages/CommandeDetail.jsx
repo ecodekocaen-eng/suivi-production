@@ -73,6 +73,7 @@ export default function CommandeDetail() {
   const startEdit = () => {
     setForm({
       client: commande.client || '',
+      nom: commande.nom || '',
       dateCommande: toDateInput(commande.dateCommande),
       dateSortieTexte: commande.dateSortieTexte || '',
       prixEsat: commande.prixEsat != null ? String(commande.prixEsat) : '',
@@ -127,7 +128,7 @@ export default function CommandeDetail() {
 
       <div className="detail-head">
         <div>
-          <h1 className="page-title">{commande.client} — {commande.designation}</h1>
+          <h1 className="page-title">{commande.client} — {commande.nom || commande.designation}</h1>
           <span className="mono muted">{commande.reference}</span> <StatutBadge statut={commande.statut} />
           {commande.supprime && <span className="badge st-deleted">Corbeille</span>}
         </div>
@@ -163,6 +164,7 @@ export default function CommandeDetail() {
           <dl className="info-grid">
             <dt>Référence</dt><dd className="mono">{commande.reference}</dd>
             <dt>Client</dt><dd>{commande.client}</dd>
+            <dt>Nom de la commande</dt><dd>{commande.nom || '—'}</dd>
             <dt>Désignation</dt><dd>{commande.designation}</dd>
             <dt>Type de mug</dt><dd>{commande.typeMug || '—'}</dd>
             <dt>Quantité</dt><dd>{commande.quantite}</dd>
@@ -187,6 +189,7 @@ export default function CommandeDetail() {
           <form onSubmit={save}>
             <div className="form-grid">
               <label>Client<input value={form.client} onChange={set('client')} required /></label>
+              <label>Nom de la commande<input value={form.nom} onChange={set('nom')} placeholder="ex : Réassort été…" /></label>
               <label>Prix ESAT
                 <div className="esat-buttons">
                   <button type="button" className={`btn btn-sm ${form.prixEsat === '0.2' ? 'btn-primary' : 'btn-ghost'}`}

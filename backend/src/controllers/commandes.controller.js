@@ -17,6 +17,7 @@ function buildData(body, { partial = false } = {}) {
 
   if (!partial || body.reference !== undefined) data.reference = cleanStr(body.reference);
   if (!partial || body.client !== undefined) data.client = cleanStr(body.client) || '';
+  if (!partial || body.nom !== undefined) data.nom = cleanStr(body.nom);
   if (!partial || body.designation !== undefined) data.designation = cleanStr(body.designation) || '';
   setIf('quantite', parseIntSafe(body.quantite, 0));
   if (body.statut !== undefined && STATUTS.includes(body.statut)) data.statut = body.statut;

@@ -13,7 +13,7 @@ import { addJoursOuvres } from '../format.js';
 import LignesEditor, { ligneVide } from './LignesEditor.jsx';
 
 const empty = {
-  reference: '', client: '', statut: 'En attente',
+  reference: '', client: '', nom: '', statut: 'En attente',
   dateCommande: '', dateSortieTexte: '', prixEsat: '', prixVente: '', atelier: '', notes: '',
 };
 
@@ -104,6 +104,11 @@ export default function CommandeFormModal({ onClose, onCreated }) {
               <datalist id="clients-suggest">
                 {clients.map((c) => <option key={c} value={c} />)}
               </datalist>
+            </label>
+
+            <label>Nom de la commande
+              <input value={form.nom} onChange={set('nom')} placeholder="ex : Réassort été, Congrès 2026…" />
+              <small className="field-hint">Libellé libre pour vous y retrouver</small>
             </label>
 
             <label>Statut

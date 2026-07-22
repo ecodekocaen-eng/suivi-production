@@ -26,19 +26,20 @@ export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onSt
           <tr>
             <Th label="Référence" col="reference" {...{ sortBy, sortDir, onSort }} />
             <Th label="Client" col="client" {...{ sortBy, sortDir, onSort }} />
+            <Th label="Nom" col="nom" {...{ sortBy, sortDir, onSort }} />
             <Th label="Désignation" col="designation" {...{ sortBy, sortDir, onSort }} />
             <Th label="Type" col="typeMug" {...{ sortBy, sortDir, onSort }} />
             <Th label="Qté" col="quantite" className="num" {...{ sortBy, sortDir, onSort }} />
             <Th label="Statut" col="statut" {...{ sortBy, sortDir, onSort }} />
             <Th label="Commande" col="dateCommande" {...{ sortBy, sortDir, onSort }} />
-            <Th label="Livraison" col="dateLivraison" {...{ sortBy, sortDir, onSort }} />
+            <Th label="Date de sortie" col="dateLivraison" {...{ sortBy, sortDir, onSort }} />
             <th className="num">📎</th>
             <th className="col-action"></th>
           </tr>
         </thead>
         <tbody>
           {commandes.length === 0 && (
-            <tr><td colSpan="10" className="empty-cell">Aucune commande.</td></tr>
+            <tr><td colSpan="11" className="empty-cell">Aucune commande.</td></tr>
           )}
           {commandes.map((c) => (
             <tr
@@ -51,6 +52,7 @@ export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onSt
                 {c.reference}
               </td>
               <td className="strong">{c.client}</td>
+              <td>{c.nom || '—'}</td>
               <td>{c.designation}</td>
               <td>{c.typeMug || '—'}</td>
               <td className="num">{c.quantite}</td>
