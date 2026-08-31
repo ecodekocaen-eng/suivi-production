@@ -2,7 +2,7 @@
 //  Routage de l'application + protection des routes par rôle.
 //  Le rôle COMPTABLE (comptable de l'ESAT) n'accède qu'à la facturation.
 // ─────────────────────────────────────────────────────────────
-import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -37,9 +37,12 @@ function Protected({ children, roles = ['ADMIN', 'OPERATEUR'], allow = null }) {
 function Layout({ children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const onLogout = async () => { await logout(); navigate('/login'); };
   const isAdmin = user?.role === 'ADMIN';
   const isComptable = user?.role === 'COMPTABLE';
+  // Le tableau de suivi (large) utilise un conteneur élargi pour tout voir sans défiler.
+  const wide = location.pathname === '/';
 
   return (
     <>
@@ -57,7 +60,7 @@ function Layout({ children }) {
           <button className="btn btn-ghost btn-sm" onClick={onLogout}>Déconnexion</button>
         </nav>
       </header>
-      <main className="container">{children}</main>
+      <main className={wide ? 'container container-wide' : 'container'}>{children}</main>
     </>
   );
 }

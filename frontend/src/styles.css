@@ -30,6 +30,8 @@ a:hover { text-decoration: underline; }
 .topbar nav { display: flex; align-items: center; gap: 1rem; }
 .topbar .user { color: var(--muted); font-size: .9rem; }
 .container { max-width: 1240px; margin: 0 auto; padding: 1.5rem; }
+/* Tableau de suivi : conteneur élargi pour tout afficher sans défilement. */
+.container.container-wide { max-width: 1600px; }
 
 .page-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .page-title { margin: 0 0 1rem; font-size: 1.5rem; }
