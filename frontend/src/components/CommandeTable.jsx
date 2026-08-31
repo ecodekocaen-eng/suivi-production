@@ -16,12 +16,12 @@ function Th({ label, col, sortBy, sortDir, onSort, className }) {
   );
 }
 
-export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onStatutChange }) {
+export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onStatutChange, compact = false }) {
   const navigate = useNavigate();
 
   return (
     <div className="table-wrap">
-      <table className="orders">
+      <table className={`orders${compact ? ' compact' : ''}`}>
         <thead>
           <tr>
             <Th label="Référence" col="reference" {...{ sortBy, sortDir, onSort }} />
@@ -51,9 +51,9 @@ export default function CommandeTable({ commandes, sortBy, sortDir, onSort, onSt
                 {!c.ouverteAt && !c.supprime && <span className="new-dot" title="Commande jamais ouverte">●</span>}
                 {c.reference}
               </td>
-              <td className="strong">{c.client}</td>
-              <td>{c.nom || '—'}</td>
-              <td>{c.designation}</td>
+              <td className="strong col-tronq" title={c.client}>{c.client}</td>
+              <td className="col-tronq" title={c.nom || ''}>{c.nom || '—'}</td>
+              <td className="col-tronq" title={c.designation || ''}>{c.designation}</td>
               <td>{c.typeMug || '—'}</td>
               <td className="num">{c.quantite}</td>
               <td onClick={(e) => e.stopPropagation()}>

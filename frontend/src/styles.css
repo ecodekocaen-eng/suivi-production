@@ -75,6 +75,16 @@ table.orders th, table.orders td { padding: .55rem .7rem; text-align: left; bord
 table.orders th { background: #f8fafc; font-weight: 600; }
 table.orders tr:hover td { background: #f9fbff; }
 .row-click { cursor: pointer; }
+
+/* Colonnes de texte long bornées (client, nom, désignation) : « … » + survol.
+   Garantit que le tableau tient à l'écran sans défilement horizontal. */
+table.orders td.col-tronq { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Vue compacte : densité réduite pour tout voir d'un coup d'œil. */
+table.orders.compact th, table.orders.compact td { padding: .28rem .45rem; font-size: .8rem; }
+table.orders.compact td.col-tronq { max-width: 120px; }
+table.orders.compact .status-select { padding: .1rem .3rem; font-size: .78rem; }
+table.orders.compact .new-dot { margin-right: .2rem; }
 /* Colonne d'action figée à droite : le bouton « Ouvrir » reste toujours visible. */
 table.orders th.col-action, table.orders td.col-action {
   position: sticky; right: 0; text-align: right;

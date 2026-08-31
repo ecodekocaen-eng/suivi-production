@@ -33,6 +33,17 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  // Vue compacte (densité réduite) mémorisée par navigateur, pour tout voir
+  // d'un coup d'œil (notamment la date de sortie) sans défilement horizontal.
+  const [compact, setCompact] = useState(() => {
+    try { return localStorage.getItem('table-compact') === '1'; } catch { return false; }
+  });
+  const toggleCompact = () => setCompact((v) => {
+    const n = !v;
+    try { localStorage.setItem('table-compact', n ? '1' : '0'); } catch { /* ignore */ }
+    return n;
+  });
+
   const load = useCallback(async () => {
     setLoading(true);
     const qs = new URLSearchParams();
@@ -110,6 +121,10 @@ export default function Dashboard() {
           <button className="btn btn-ghost btn-sm" onClick={() => setField('statuts', DEFAUT_STATUTS)}>Actifs</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setField('statuts', [])}>Tout</button>
         </span>
+        <button className={`btn btn-sm ${compact ? 'btn-primary' : 'btn-ghost'}`} onClick={toggleCompact}
+                title="Réduire la densité pour tout voir sans défiler">
+          Vue compacte
+        </button>
         {user?.role === 'ADMIN' && (
           <label className="check">
             <input type="checkbox" checked={filters.inclureSupprimees}
@@ -133,6 +148,7 @@ export default function Dashboard() {
         sortDir={filters.sortDir}
         onSort={onSort}
         onStatutChange={onStatutChange}
+        compact={compact}
       />
 
       {/* Pagination */}
