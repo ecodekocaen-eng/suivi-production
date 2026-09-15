@@ -66,6 +66,9 @@ model Commande {
   // ── Première ouverture : null = jamais ouverte (surlignée dans le tableau) ──
   ouverteAt DateTime?
 
+  // ── Stock : true dès que la commande a consommé le stock (entrée en production) ──
+  stockConsomme Boolean @default(false)
+
   // ── Facturation ESAT : rattachement à un relevé (null = à facturer) ──
   releve    Releve?   @relation(fields: [releveId], references: [id])
   releveId  Int?
@@ -138,6 +141,7 @@ model Produit {
   imageUrl   String? // URL publique (Vercel Blob) ; null en stockage disque
   actif      Boolean  @default(true)
   compteMugs Boolean  @default(true) // false = accessoire (étiquette…) non compté dans la quantité de mugs
+  stock      Int? // stock disponible ; null = non suivi. Se décrémente à l'entrée en production.
   createdAt  DateTime @default(now())
 }
 

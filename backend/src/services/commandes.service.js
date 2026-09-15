@@ -112,6 +112,44 @@ export function marquerOuverte(id) {
   });
 }
 
+// Statuts pour lesquels la commande a consommé le stock (production démarrée
+// ou au-delà). Le stock se décrémente au passage « En cours de prod ».
+const STATUTS_STOCK = new Set(['En cours de prod', 'Terminé', 'Expédié']);
+
+// Synchronise le stock des produits avec l'état de la commande :
+// - décrémente à la première entrée en production ;
+// - restitue si la commande repasse avant production.
+// Idempotent grâce au drapeau stockConsomme (pas de double décompte).
+// Ne touche que les produits qui suivent un stock (stock non null).
+async function syncStock(commandeId) {
+  const cmd = await prisma.commande.findUnique({
+    where: { id: Number(commandeId) },
+    include: { lignes: { select: { typeMug: true, quantite: true } } },
+  });
+  if (!cmd) return;
+
+  const doitConsommer = STATUTS_STOCK.has(cmd.statut);
+  if (doitConsommer === cmd.stockConsomme) return; // déjà à jour, rien à faire
+
+  // Quantité par produit : à partir des lignes, sinon de l'en-tête.
+  const source = cmd.lignes.length ? cmd.lignes : [{ typeMug: cmd.typeMug, quantite: cmd.quantite }];
+  const parProduit = new Map();
+  for (const l of source) {
+    const nom = (l.typeMug || '').trim();
+    if (!nom || !l.quantite) continue;
+    parProduit.set(nom, (parProduit.get(nom) || 0) + l.quantite);
+  }
+
+  const signe = doitConsommer ? -1 : 1; // -1 = consomme, +1 = restitue
+  for (const [nom, q] of parProduit) {
+    await prisma.produit.updateMany({
+      where: { nom, stock: { not: null } },
+      data: { stock: { increment: signe * q } },
+    });
+  }
+  await prisma.commande.update({ where: { id: cmd.id }, data: { stockConsomme: doitConsommer } });
+}
+
 // Compte des commandes (non supprimées) par statut, pour le tableau de bord.
 export async function countByStatut() {
   const rows = await prisma.commande.groupBy({
@@ -183,6 +221,8 @@ export async function createCommande(data, userId, lignes = null) {
     userId,
     commandeId: commande.id,
   });
+  // Si la commande est créée directement en production, on consomme le stock.
+  await syncStock(commande.id);
   return commande;
 }
 
@@ -256,6 +296,9 @@ export async function updateCommande(id, data, userId, lignes = null) {
       commandeId: commande.id,
     });
   }
+
+  // Ajuste le stock des produits si la commande change d'état de production.
+  if (statutChange) await syncStock(commande.id);
 
   // prisma.commande.update ci-dessus renvoie déjà la ligne à jour ; les
   // opérations sur les lignes ne modifient pas l'en-tête → pas de relecture.

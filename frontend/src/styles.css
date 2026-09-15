@@ -338,6 +338,9 @@ label.full { margin-top: 1rem; }
 /* Sélecteur de dates des statistiques */
 .stats-dates { display: inline-flex; align-items: center; gap: .35rem; }
 
+/* Stock en rupture (≤ 0) dans le catalogue produits */
+.stock-rupture { color: var(--danger); font-weight: 700; }
+
 /* Documents de commande (bons de commande, rendus 3D…) */
 .doc-list { list-style: none; margin: 0; padding: 0; }
 .doc-row { display: flex; align-items: center; gap: .6rem; padding: .45rem .2rem;

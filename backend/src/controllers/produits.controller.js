@@ -4,8 +4,14 @@
 //  Miniature stockée via la couche storage (disk ou Blob).
 // ─────────────────────────────────────────────────────────────
 import { prisma } from '../prisma.js';
-import { parsePrice, cleanStr } from '../utils/parse.js';
+import { parsePrice, parseIntSafe, cleanStr } from '../utils/parse.js';
 import { saveBuffer, deleteByKey, readBuffer, makeFilename } from '../storage.js';
+
+// Parse une valeur de stock : vide/absent → null (non suivi), sinon entier.
+function parseStock(v) {
+  if (v === undefined || v === null || String(v).trim() === '') return null;
+  return parseIntSafe(v, null);
+}
 
 export async function listProduits(req, res) {
   const produits = await prisma.produit.findMany({ orderBy: { nom: 'asc' } });
@@ -31,6 +37,7 @@ export async function createProduit(req, res) {
     data: {
       nom,
       prixAchat: parsePrice(req.body.prixAchat),
+      stock: parseStock(req.body.stock),
       image,
       imageUrl,
       // false = accessoire (étiquette…) non compté dans la quantité de mugs.
@@ -50,6 +57,7 @@ export async function updateProduit(req, res) {
   const data = {};
   if (req.body.nom !== undefined) data.nom = cleanStr(req.body.nom) || existing.nom;
   if (req.body.prixAchat !== undefined) data.prixAchat = parsePrice(req.body.prixAchat);
+  if (req.body.stock !== undefined) data.stock = parseStock(req.body.stock);
   if (req.body.actif !== undefined) data.actif = req.body.actif === 'true' || req.body.actif === true;
   if (req.body.compteMugs !== undefined) data.compteMugs = req.body.compteMugs === 'true' || req.body.compteMugs === true;
 

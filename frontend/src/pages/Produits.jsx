@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import Thumb from '../components/Thumb.jsx';
 
-const emptyForm = { nom: '', prixAchat: '', image: null };
+const emptyForm = { nom: '', prixAchat: '', stock: '', image: null };
 
 export default function Produits() {
   const [produits, setProduits] = useState([]);
@@ -22,7 +22,7 @@ export default function Produits() {
     e.preventDefault();
     setError(null); setMsg(null);
     try {
-      await api.multipart('POST', '/produits', { nom: form.nom, prixAchat: form.prixAchat }, form.image);
+      await api.multipart('POST', '/produits', { nom: form.nom, prixAchat: form.prixAchat, stock: form.stock }, form.image);
       setForm(emptyForm);
       if (fileRef.current) fileRef.current.value = '';
       setMsg('Produit créé.');
@@ -47,7 +47,8 @@ export default function Produits() {
   return (
     <>
       <h1 className="page-title">Produits (types de mug)</h1>
-      <p className="muted">Catalogue utilisé pour les lignes de commande : nom, prix d'achat et miniature.</p>
+      <p className="muted">Catalogue utilisé pour les lignes de commande : nom, prix d'achat, stock et miniature.
+        Le stock se décrémente automatiquement quand une commande entre en production (vide = non suivi).</p>
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-info">{msg}</div>}
 
@@ -57,6 +58,9 @@ export default function Produits() {
           <label>Nom *<input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} required /></label>
           <label>Prix d'achat (€)
             <input value={form.prixAchat} onChange={(e) => setForm({ ...form, prixAchat: e.target.value })} placeholder="0.45" />
+          </label>
+          <label>Stock (optionnel)
+            <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="ex : 500" />
           </label>
           <label>Miniature
             <input ref={fileRef} type="file" accept="image/*" onChange={(e) => setForm({ ...form, image: e.target.files[0] || null })} />
@@ -70,7 +74,7 @@ export default function Produits() {
         <div className="table-wrap no-clip">
           <table className="orders">
             <thead>
-              <tr><th>Miniature</th><th>Nom</th><th className="num">Prix d'achat</th><th>Actif</th><th>Compté en mugs</th><th>Actions</th></tr>
+              <tr><th>Miniature</th><th>Nom</th><th className="num">Prix d'achat</th><th className="num">Stock</th><th>Actif</th><th>Compté en mugs</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {produits.map((p) => (
@@ -82,6 +86,10 @@ export default function Produits() {
                   </td>
                   <td className="strong">{p.nom}</td>
                   <td className="num">{p.prixAchat != null ? `${p.prixAchat} €` : '—'}</td>
+                  <td className={`num${p.stock != null && p.stock <= 0 ? ' stock-rupture' : ''}`}
+                      title={p.stock != null && p.stock <= 0 ? 'Rupture / stock négatif' : ''}>
+                    {p.stock == null ? '—' : p.stock}
+                  </td>
                   <td>{p.actif ? '✅' : '🚫'}</td>
                   <td title={p.compteMugs !== false ? 'Compté dans la quantité de mugs' : 'Accessoire : non compté dans la quantité de mugs'}>
                     {p.compteMugs !== false ? '✅' : '➖ accessoire'}
@@ -95,6 +103,11 @@ export default function Produits() {
                     <button className="btn btn-ghost btn-xs"
                             onClick={() => { const v = prompt('Prix d\'achat (€) :', p.prixAchat ?? ''); if (v !== null) maj(p.id, { prixAchat: v }); }}>
                       💶 Prix
+                    </button>
+                    <button className="btn btn-ghost btn-xs"
+                            title="Définir le stock disponible (vide = non suivi)"
+                            onClick={() => { const v = prompt('Stock disponible (laisser vide pour ne pas suivre) :', p.stock ?? ''); if (v !== null) maj(p.id, { stock: v }); }}>
+                      📦 Stock
                     </button>
                     <button className={`btn btn-xs ${p.actif ? 'btn-ghost' : 'btn-primary'}`}
                             onClick={() => maj(p.id, { actif: !p.actif })}>
