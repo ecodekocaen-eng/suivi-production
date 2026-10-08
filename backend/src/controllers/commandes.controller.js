@@ -35,7 +35,14 @@ function buildData(body, { partial = false } = {}) {
   setIf('rebut', parseIntSafe(body.rebut, 0));
   if (!partial || body.noteTransport !== undefined) data.noteTransport = cleanStr(body.noteTransport);
   if (!partial || body.aFacturer !== undefined) data.aFacturer = cleanStr(body.aFacturer);
-  if (!partial || body.dateSortieTexte !== undefined) data.dateSortieTexte = cleanStr(body.dateSortieTexte);
+  // La date de sortie est saisie en texte (ex : "23/10/2026" ou "ASAP").
+  // On en déduit la date parsée (dateLivraison) pour que le tri chronologique
+  // fonctionne ; un texte non daté (ASAP…) laisse la date à null.
+  if (!partial || body.dateSortieTexte !== undefined) {
+    const texte = cleanStr(body.dateSortieTexte);
+    data.dateSortieTexte = texte;
+    data.dateLivraison = texte ? parseFrDate(texte) : null;
+  }
 
   return data;
 }

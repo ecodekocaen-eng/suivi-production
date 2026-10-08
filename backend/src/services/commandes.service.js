@@ -38,8 +38,13 @@ export async function listCommandes({
     if (livraisonFin) where.dateLivraison.lte = new Date(livraisonFin);
   }
 
-  const orderBy = {};
-  orderBy[SORTABLE.has(sortBy) ? sortBy : 'dateCommande'] = sortDir === 'asc' ? 'asc' : 'desc';
+  const champTri = SORTABLE.has(sortBy) ? sortBy : 'dateCommande';
+  const dir = sortDir === 'asc' ? 'asc' : 'desc';
+  // Pour les colonnes de date, on relègue toujours les valeurs vides (commandes
+  // sans date parsable : "ASAP", texte libre…) en bas, quel que soit le sens.
+  const orderBy = (champTri === 'dateLivraison' || champTri === 'dateCommande')
+    ? { [champTri]: { sort: dir, nulls: 'last' } }
+    : { [champTri]: dir };
 
   const take = Math.min(Math.max(parseInt(pageSize, 10) || 20, 1), 200);
   const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
