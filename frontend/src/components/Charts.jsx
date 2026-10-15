@@ -8,7 +8,7 @@ const court = (v) => (v >= 1000 ? `${Math.round(v / 100) / 10}k`.replace('.', ',
 
 // Courbe (une ou deux séries) — ex : production mensuelle + comparaison N-1.
 // Survol : repère vertical + infobulle avec les valeurs du mois.
-export function LineChart({ labels, series, height = 210 }) {
+export function LineChart({ labels, titres = labels, series, height = 210 }) {
   const [survol, setSurvol] = useState(null);
   const W = 680; const padL = 44; const padR = 14; const padT = 16; const padB = 28;
   const n = labels.length || 1;
@@ -62,7 +62,7 @@ export function LineChart({ labels, series, height = 210 }) {
           ))}
           <g className="lc-tip" transform={`translate(${tipX}, ${padT})`}>
             <rect width={tipW} height={18 + series.length * 16} rx="7" />
-            <text x="10" y="15">{labels[survol]}</text>
+            <text x="10" y="15">{titres[survol]}</text>
             {series.map((s, si) => (
               <text key={si} x="10" y={31 + si * 16} fill={s.dash ? '#d6cfc7' : '#fff'}>
                 {s.label} : {fmtNumber(s.data[survol])}

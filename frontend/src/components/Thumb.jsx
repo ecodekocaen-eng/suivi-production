@@ -1,14 +1,14 @@
 // ─────────────────────────────────────────────────────────────
 //  Miniature produit avec aperçu agrandi au survol (CSS only).
-//  Sans image : pastille neutre avec une icône de mug.
+//  Sans photo : illustration du produit (mug blanc, bicolore, noir… ou étiquette).
 // ─────────────────────────────────────────────────────────────
-import { Coffee } from 'lucide-react';
+import MugIllustration from './MugIllustration.jsx';
 
 export default function Thumb({ src, alt = '', size = 32 }) {
   if (!src) {
     return (
-      <span className="thumb-ph" style={{ '--thumb-size': `${size}px` }} aria-hidden="true">
-        <Coffee />
+      <span className="thumb-ph" style={{ '--thumb-size': `${size}px` }} title={alt || undefined}>
+        <MugIllustration nom={alt} />
       </span>
     );
   }

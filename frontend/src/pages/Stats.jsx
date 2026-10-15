@@ -114,7 +114,9 @@ export default function Stats() {
   const mois12 = parMois.slice(-12);
   const lookup = Object.fromEntries(parMois.map((m) => [m.mois, m]));
   const shiftYear = (ym) => { const [y, m] = ym.split('-'); return `${Number(y) - 1}-${m}`; };
-  const labels = mois12.map((m) => fmtMois(m.mois));
+  // Axe : mois courts, l'année seulement au 1er mois affiché et en janvier ; infobulle : mois complet.
+  const labels = mois12.map((m, i) => (i === 0 || m.mois.endsWith('-01') ? fmtMois(m.mois) : fmtMois(m.mois).split(' ')[0]));
+  const titres = mois12.map((m) => fmtMois(m.mois));
   const cur = mois12.map((m) => m[metric]);
   const prev = mois12.map((m) => lookup[shiftYear(m.mois)]?.[metric] ?? 0);
   const hasPrev = prev.some((v) => v > 0);
@@ -134,7 +136,7 @@ export default function Stats() {
         <Kpi icon={Package} label="Mugs produits" value={fmtNumber(kpis.quantiteTotale)} delta={deltas?.mugs} />
         <Kpi icon={ClipboardList} label="Commandes" value={fmtNumber(kpis.nbCommandes)} delta={deltas?.commandes}
              note={plural(kpis.nbClients, 'client')} />
-        <Kpi icon={Euro} label="Coût d’achat ESAT" value={fmtNumber(Math.round(kpis.coutAchat || 0))} suffix="€" delta={deltas?.cout} />
+        <Kpi icon={Euro} label="Coût ESAT" value={fmtNumber(Math.round(kpis.coutAchat || 0))} suffix="€" delta={deltas?.cout} />
         <Kpi icon={Factory} label="À produire" value={fmtNumber(kpis.aProduire)} suffix="mugs"
              note={plural(kpis.aProduireCommandes, 'commande')} />
         <Kpi icon={Timer} label="Délai moyen" value={kpis.delaiMoyenJours != null ? fmtNumber(kpis.delaiMoyenJours) : '—'}
@@ -181,6 +183,7 @@ export default function Stats() {
           {mois12.length === 0 ? <p className="muted">Pas assez de données.</p> : (
             <LineChart
               labels={labels}
+              titres={titres}
               series={[
                 { label: 'Cette année', color: COULEUR_PRINCIPALE, data: cur },
                 ...(hasPrev ? [{ label: 'Année préc.', color: '#a8a097', dash: true, data: prev }] : []),
@@ -240,7 +243,9 @@ export default function Stats() {
                       <div className="muted small truncate">{r.designation} · {fmtNumber(r.quantite)} mugs · sortie {fmtDate(r.dateLivraison)}</div>
                     </div>
                     <div className="late-right">
-                      <span className="badge badge-danger">{r.joursRetard} j de retard</span>
+                      {r.joursRetard > 0
+                        ? <span className="badge badge-danger">{r.joursRetard} j de retard</span>
+                        : <span className="badge badge-warning">Sortie aujourd’hui</span>}
                       <StatutBadge statut={r.statut} />
                     </div>
                   </li>

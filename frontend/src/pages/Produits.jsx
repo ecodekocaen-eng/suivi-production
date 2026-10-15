@@ -10,6 +10,7 @@ import { PageHeader, EmptyState, Loading, Switch, usePageTitle } from '../ui/bit
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import Modal from '../ui/Modal.jsx';
 import { imageProduit } from '../components/Thumb.jsx';
+import MugIllustration from '../components/MugIllustration.jsx';
 
 // Fenêtre de création / modification d'un produit.
 function ProduitModal({ produit = null, onClose, onSaved }) {
@@ -90,7 +91,7 @@ function ProduitModal({ produit = null, onClose, onSaved }) {
         <div className="field">
           <span className="field-label">Miniature</span>
           <div className="image-pick">
-            <span className="image-pick-preview">{apercu ? <img src={apercu} alt="" /> : <Coffee />}</span>
+            <span className="image-pick-preview">{apercu ? <img src={apercu} alt="" /> : <MugIllustration nom={form.nom || produit?.nom} />}</span>
             <div className="stack" style={{ gap: '.35rem' }}>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => choisirImage(e.target.files[0])} />
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
@@ -170,10 +171,11 @@ export default function Produits() {
                 <div className="product-media">
                   {p.image
                     ? <img src={imageProduit(p)} alt={p.nom} loading="lazy" />
-                    : <span className="placeholder"><Coffee />Pas de miniature</span>}
+                    : <MugIllustration nom={p.nom} className="product-illu" />}
                   <span className="product-flags">
                     {!p.actif && <span className="badge">Inactif</span>}
                     {p.compteMugs === false && <span className="badge badge-info">Accessoire</span>}
+                    {!p.image && <span className="badge" title="Illustration par défaut : ajoutez une photo avec le bouton appareil photo">Sans photo</span>}
                   </span>
                   <label className="btn btn-secondary btn-icon btn-sm product-photo-btn" title="Changer la photo">
                     <Camera />
