@@ -16,6 +16,7 @@ import { useToast } from '../ui/feedback.jsx';
 import { StatutIcon } from '../components/Statut.jsx';
 import CommandeTable from '../components/CommandeTable.jsx';
 import CommandeFormModal from '../components/CommandeFormModal.jsx';
+import ChargeEsat from '../components/ChargeEsat.jsx';
 
 const memeSelection = (a, b) => a.length === b.length && a.every((s) => b.includes(s));
 
@@ -33,6 +34,9 @@ export default function Dashboard() {
   const [charge, setCharge] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [produitsByNom, setProduitsByNom] = useState({});
+  // Incrémenté quand la charge change (statut, nouvelle commande) : l'indicateur se recalcule.
+  const [versionCharge, setVersionCharge] = useState(0);
+  const majCharge = () => setVersionCharge((v) => v + 1);
   const searchRef = useRef(null);
 
   const [prefs, setPrefs] = useStoredState('tableau-prefs', {
@@ -126,6 +130,7 @@ export default function Dashboard() {
               toast(`${commande.reference} : statut « ${STATUT_LABELS[avant]} » rétabli`);
             } catch (err) { toast.error(err.message); }
             load();
+            majCharge();
           },
         },
       });
@@ -133,6 +138,7 @@ export default function Dashboard() {
       toast.error(err.message);
     }
     load();
+    majCharge();
   };
 
   // Active/désactive un statut dans le filtre (multi-sélection).
@@ -156,6 +162,7 @@ export default function Dashboard() {
   const onCreated = (commande) => {
     setShowModal(false);
     load();
+    majCharge();
     toast.success(<>Commande <strong>{commande.reference}</strong> créée</>, {
       action: { label: 'Ouvrir', onClick: () => navigate(`/commandes/${commande.id}`) },
     });
@@ -172,6 +179,8 @@ export default function Dashboard() {
           </button>
         )}
       />
+
+      <ChargeEsat version={versionCharge} />
 
       {/* Pipeline des statuts = filtres (cliquer pour afficher / masquer) */}
       <div className="pipeline" role="group" aria-label="Filtrer par statut">

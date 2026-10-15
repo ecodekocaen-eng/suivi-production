@@ -399,6 +399,57 @@ input:disabled, select:disabled, textarea:disabled { background: var(--surface-3
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Charge de l'ESAT (tableau de suivi) ────────────────────── */
+.charge { --acc: var(--muted); --acc-bg: var(--surface-3); --acc-bd: var(--border); margin-bottom: 1.25rem; overflow: hidden; box-shadow: inset 4px 0 0 var(--acc), var(--shadow-xs); }
+.charge-ok     { --acc: var(--success); --acc-bg: var(--success-bg); --acc-bd: var(--success-bd); }
+.charge-tendu  { --acc: #d97706;        --acc-bg: var(--warning-bg); --acc-bd: var(--warning-bd); }
+.charge-galere { --acc: var(--danger);  --acc-bg: var(--danger-bg);  --acc-bd: var(--danger-bd); }
+.charge-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem 2rem; flex-wrap: wrap; padding: .85rem 1.1rem .85rem 1.4rem; }
+.charge-verdict { display: flex; align-items: center; gap: .9rem; flex: 1 1 340px; min-width: 0; }
+.charge-pastille { width: 44px; height: 44px; border-radius: 14px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--acc); background: var(--acc-bg); box-shadow: inset 0 0 0 1px var(--acc-bd); }
+.charge-pastille svg { width: 26px; height: 26px; }
+.charge-titre { font-size: 1.2rem; font-weight: 750; letter-spacing: -.01em; color: var(--acc); }
+.charge-sous { font-size: .9rem; color: var(--text-2); margin-top: .1rem; }
+.charge-chiffres { display: flex; align-items: center; gap: .6rem 1.75rem; flex-wrap: wrap; }
+.charge-toggle svg { transition: transform .2s var(--ease); }
+.charge-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.charge-chiffre { display: flex; flex-direction: column; min-width: 96px; }
+.charge-chiffre span { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.charge-chiffre strong { font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.charge-chiffre .charge-date { text-transform: capitalize; }
+.charge-chiffre small { font-size: .76rem; color: var(--muted); }
+.charge-indice strong { color: var(--acc); }
+.indice-jauge { display: block; width: 100%; max-width: 110px; height: 6px; margin-top: .3rem; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.indice-jauge > span { display: block; height: 100%; border-radius: 99px; background: var(--acc); }
+.charge-jours { display: flex; gap: .4rem; padding: .1rem 1.1rem .85rem 1.4rem; overflow-x: auto; scrollbar-width: thin; }
+.charge-jour {
+  flex: 1 0 62px; display: flex; flex-direction: column; align-items: center; gap: .1rem; padding: .4rem .25rem .3rem;
+  border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: .74rem; cursor: default;
+}
+.charge-jour.is-today { background: var(--brand-50); border-color: var(--brand-200); }
+.charge-jour.is-plus { justify-content: center; flex: 0 0 58px; color: var(--muted); }
+.cj-nom { font-weight: 700; color: var(--text-2); text-transform: capitalize; }
+.charge-jour.is-today .cj-nom { color: var(--brand); }
+.cj-date { color: var(--muted); font-weight: 500; font-size: .7rem; font-variant-numeric: tabular-nums; }
+.cj-barre { position: relative; width: 24px; height: 30px; margin: .15rem 0; border-radius: 6px; background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border); display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+/* Production à l'heure (bleu) au-dessus de la production hors délai (rouge, faite en premier). */
+.cj-barre > span { display: block; width: 100%; flex: none; background: #3b82f6; transition: height .3s var(--ease); }
+.cj-barre > .cj-retard { background: var(--danger); }
+.charge-jour.is-retard { border-color: var(--danger-bd); }
+.cj-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.charge-jour.is-libre .cj-val { color: var(--faint); font-weight: 600; }
+.cj-sorties { font-size: .66rem; font-weight: 650; color: var(--brand-700); white-space: nowrap; }
+.charge-risques { list-style: none; margin: 0; padding: .6rem 1.25rem .7rem 1.5rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: .15rem; background: var(--acc-bg); }
+.charge-risques a { display: flex; align-items: flex-start; gap: .6rem; padding: .35rem .4rem; border-radius: 8px; color: var(--text); font-size: .88rem; min-width: 0; }
+.charge-risques a:hover { background: rgba(255, 255, 255, .7); text-decoration: none; }
+.charge-risques a > svg { width: 16px; height: 16px; flex: none; margin-top: .15rem; }
+.charge-risque { display: flex; align-items: baseline; flex-wrap: wrap; gap: .1rem .75rem; min-width: 0; }
+.charge-risque-qui { display: inline-flex; align-items: baseline; gap: .6rem; min-width: 0; }
+.charge-risque .ref { white-space: nowrap; }
+.charge-risques .charge-go { margin-left: auto; color: var(--faint); }
+.charge-note { display: flex; align-items: center; gap: .4rem; margin: 0; padding: .55rem 1.25rem .65rem 1.5rem; border-top: 1px solid var(--border); font-size: .74rem; color: var(--muted); }
+.charge-note svg { width: 14px; height: 14px; flex: none; }
+
 /* ── Tableau de suivi ───────────────────────────────────────── */
 .pipeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
 .pipe {

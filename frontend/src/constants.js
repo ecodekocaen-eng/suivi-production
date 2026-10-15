@@ -21,6 +21,10 @@ export const STATUT_LABELS = {
 // Statuts affichés par défaut sur le tableau (les commandes « en cours »).
 export const STATUTS_EN_COURS = ['En attente', 'Impression OK', 'En cours de prod'];
 
+// Production moyenne de l'ESAT, en mugs par jour ouvré (lundi-vendredi).
+// Sert au plan de charge du tableau de suivi (src/charge.js).
+export const CAPACITE_JOUR = 800;
+
 // Types de mug courants (suggestions pour l'autocomplétion des lignes).
 export const TYPES_MUG = [
   'MUG BLANC',
