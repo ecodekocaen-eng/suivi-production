@@ -421,6 +421,17 @@ input:disabled, select:disabled, textarea:disabled { background: var(--surface-3
 .charge-indice strong { color: var(--acc); }
 .indice-jauge { display: block; width: 100%; max-width: 110px; height: 6px; margin-top: .3rem; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
 .indice-jauge > span { display: block; height: 100%; border-radius: 99px; background: var(--acc); }
+/* Réglette de simulation de la cadence */
+.charge-cadence { display: flex; align-items: center; gap: .4rem 1rem; flex-wrap: wrap; padding: .5rem 1.1rem .6rem 1.4rem; border-top: 1px solid var(--border); background: var(--surface-2); }
+.charge-cadence-label { display: inline-flex; align-items: center; gap: .4rem; font-size: .84rem; font-weight: 650; color: var(--text-2); white-space: nowrap; }
+.charge-cadence-label svg { width: 16px; height: 16px; color: var(--muted); }
+.charge-cadence input[type='range'] { flex: 1 1 200px; max-width: 360px; width: auto; height: 28px; padding: 0; border: 0; background: transparent; accent-color: var(--brand); cursor: pointer; }
+.charge-cadence input[type='range']:focus { box-shadow: none; }
+.charge-cadence input[type='range']:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.charge-cadence-val { font-size: .88rem; color: var(--text-2); white-space: nowrap; min-width: 8.5rem; }
+.charge-cadence-val strong { font-size: 1.05rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.charge-cadence-aide { font-size: .78rem; color: var(--muted); }
+.charge-cadence + .charge-jours { padding-top: .85rem; }
 .charge-jours { display: flex; gap: .4rem; padding: .1rem 1.1rem .85rem 1.4rem; overflow-x: auto; scrollbar-width: thin; }
 .charge-jour {
   flex: 1 0 62px; display: flex; flex-direction: column; align-items: center; gap: .1rem; padding: .4rem .25rem .3rem;

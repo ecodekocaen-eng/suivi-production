@@ -3,16 +3,24 @@
 //  moyenne de CAPACITE_JOUR mugs par jour ouvré, peut-on sortir toutes
 //  les commandes en cours à leur date ? Verdict « On est bien » /
 //  « Ça se tend » / « C'est la galère », chiffres clés, production
-//  prévue jour par jour et commandes à risque. Calcul : src/charge.js.
+//  prévue jour par jour et commandes à risque. Une réglette permet de
+//  simuler une autre cadence (mugs / jour) et voir l'effet en direct.
+//  Calcul : src/charge.js.
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaceSlightlySmiling, FaceNeutral, FaceSlightlyFrowning, Coffee, TriangleAlert, Info, ChevronRight, ChevronDown } from 'lucide-react';
+import {
+  FaceSlightlySmiling, FaceNeutral, FaceSlightlyFrowning, Coffee, TriangleAlert, Info, ChevronRight, ChevronDown, Gauge, RotateCcw,
+} from 'lucide-react';
 import { api } from '../api.js';
-import { STATUTS_EN_COURS } from '../constants.js';
+import { CAPACITE_JOUR, STATUTS_EN_COURS } from '../constants.js';
 import { planCharge } from '../charge.js';
 import { fmtNumber, plural } from '../format.js';
 import { useStoredState } from '../ui/bits.jsx';
+
+// Bornes de la réglette de simulation (mugs par jour ouvré).
+const CADENCE_MIN = 100;
+const CADENCE_MAX = 2000;
 
 const TITRES = {
   ok: 'On est bien',
@@ -61,6 +69,9 @@ export default function ChargeEsat({ version = 0 }) {
   // Détail jour par jour : ouvert d'office quand ça se tend. Le choix de l'utilisateur
   // est mémorisé pour le verdict en cours ; si le verdict change, on revient à l'automatique.
   const [choix, setChoix] = useStoredState('charge-detail', null);
+  // Cadence simulée avec la réglette (non mémorisée : chaque visite repart de la cadence habituelle).
+  const [capacite, setCapacite] = useState(CAPACITE_JOUR);
+  const idCadence = useId();
 
   useEffect(() => {
     let actif = true;
@@ -70,7 +81,13 @@ export default function ChargeEsat({ version = 0 }) {
     return () => { actif = false; };
   }, [version]);
 
-  const plan = useMemo(() => (commandes ? planCharge(commandes) : null), [commandes]);
+  // Plan à la cadence habituelle (pilote l'ouverture du détail) et plan simulé (affiché).
+  const planBase = useMemo(() => (commandes ? planCharge(commandes) : null), [commandes]);
+  const plan = useMemo(
+    () => (commandes && capacite !== CAPACITE_JOUR ? planCharge(commandes, { capacite }) : planBase),
+    [commandes, capacite, planBase],
+  );
+  const simulation = capacite !== CAPACITE_JOUR;
 
   if (!plan) {
     return (
@@ -89,8 +106,10 @@ export default function ChargeEsat({ version = 0 }) {
   }
 
   const Icone = ICONES[plan.verdict];
-  const alerte = plan.verdict === 'tendu' || plan.verdict === 'galere';
-  const ouvert = plan.verdict !== 'vide' && (choix?.verdict === plan.verdict ? choix.ouvert : alerte);
+  // Le détail suit la situation réelle (cadence habituelle) : il ne s'ouvre ni ne se ferme
+  // pendant qu'on fait glisser la réglette.
+  const alerte = planBase.verdict === 'tendu' || planBase.verdict === 'galere';
+  const ouvert = planBase.verdict !== 'vide' && (choix?.verdict === planBase.verdict ? choix.ouvert : alerte);
   const aujourdhui = new Date();
   const alertes = [...plan.enRetard, ...plan.aRisque];
 
@@ -128,12 +147,35 @@ export default function ChargeEsat({ version = 0 }) {
               <small>à {fmtNumber(plan.capacite)} mugs / jour</small>
             </div>
             <button type="button" className="btn btn-ghost btn-sm charge-toggle" aria-expanded={ouvert}
-                    onClick={() => setChoix({ verdict: plan.verdict, ouvert: !ouvert })}>
+                    onClick={() => setChoix({ verdict: planBase.verdict, ouvert: !ouvert })}>
               {ouvert ? 'Masquer le détail' : 'Voir le détail'}<ChevronDown />
             </button>
           </div>
         )}
       </div>
+
+      {planBase.verdict !== 'vide' && (
+        <div className="charge-cadence">
+          <label className="charge-cadence-label" htmlFor={idCadence}><Gauge />Cadence de l’ESAT</label>
+          <input id={idCadence} type="range" min={CADENCE_MIN} max={CADENCE_MAX} step={50} value={capacite}
+                 list={`${idCadence}-reperes`} onChange={(e) => setCapacite(Number(e.target.value))}
+                 aria-valuetext={`${capacite} mugs par jour`} />
+          <datalist id={`${idCadence}-reperes`}><option value={CAPACITE_JOUR} /></datalist>
+          <output htmlFor={idCadence} className="charge-cadence-val">
+            <strong>{fmtNumber(capacite)}</strong> mugs / jour
+          </output>
+          {simulation ? (
+            <>
+              <span className="badge badge-info">Simulation</span>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setCapacite(CAPACITE_JOUR)}>
+                <RotateCcw />Revenir à {fmtNumber(CAPACITE_JOUR)}
+              </button>
+            </>
+          ) : (
+            <span className="charge-cadence-aide">Faites glisser pour simuler une autre cadence</span>
+          )}
+        </div>
+      )}
 
       {ouvert && (
         <div className="charge-jours" role="list" aria-label="Production prévue par jour ouvré">
