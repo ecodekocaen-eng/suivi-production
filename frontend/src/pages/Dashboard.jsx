@@ -180,7 +180,8 @@ export default function Dashboard() {
         )}
       />
 
-      <ChargeEsat version={versionCharge} />
+      {/* Indicateur de charge de l'ESAT : réservé aux administrateurs. */}
+      {isAdmin && <ChargeEsat version={versionCharge} />}
 
       {/* Pipeline des statuts = filtres (cliquer pour afficher / masquer) */}
       <div className="pipeline" role="group" aria-label="Filtrer par statut">
