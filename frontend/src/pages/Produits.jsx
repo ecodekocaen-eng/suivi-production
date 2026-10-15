@@ -1,131 +1,216 @@
 // ─────────────────────────────────────────────────────────────
 //  Gestion du catalogue produits (types de mug) — réservé ADMIN.
-//  Nom + prix d'achat + miniature.
+//  Cartes produit (miniature, prix d'achat, stock) + fenêtre d'édition.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react';
+import { Plus, Pencil, Trash, Coffee, ImagePlus, Camera, LoaderCircle } from 'lucide-react';
 import { api } from '../api.js';
-import Thumb from '../components/Thumb.jsx';
+import { fmtEuro, fmtNumber } from '../format.js';
+import { PageHeader, EmptyState, Loading, Switch, usePageTitle } from '../ui/bits.jsx';
+import { useConfirm, useToast } from '../ui/feedback.jsx';
+import Modal from '../ui/Modal.jsx';
+import { imageProduit } from '../components/Thumb.jsx';
 
-const emptyForm = { nom: '', prixAchat: '', stock: '', image: null };
-
-export default function Produits() {
-  const [produits, setProduits] = useState([]);
-  const [form, setForm] = useState(emptyForm);
-  const [error, setError] = useState(null);
-  const [msg, setMsg] = useState(null);
+// Fenêtre de création / modification d'un produit.
+function ProduitModal({ produit = null, onClose, onSaved }) {
+  const edition = !!produit;
   const fileRef = useRef(null);
+  const [form, setForm] = useState({
+    nom: produit?.nom || '',
+    prixAchat: produit?.prixAchat ?? '',
+    stock: produit?.stock ?? '',
+    compteMugs: produit ? produit.compteMugs !== false : true,
+    actif: produit ? produit.actif : true,
+  });
+  const [image, setImage] = useState(null);
+  const [apercu, setApercu] = useState(imageProduit(produit));
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const load = async () => setProduits((await api.get('/produits')).produits);
-  useEffect(() => { load(); }, []);
+  useEffect(() => () => { if (image) URL.revokeObjectURL(apercu); }, [image, apercu]);
 
-  const creer = async (e) => {
+  const choisirImage = (f) => {
+    if (!f) return;
+    setImage(f);
+    setApercu(URL.createObjectURL(f));
+  };
+
+  const submit = async (e) => {
     e.preventDefault();
-    setError(null); setMsg(null);
+    setError(null); setBusy(true);
+    const champs = {
+      prixAchat: String(form.prixAchat ?? '').replace(',', '.'),
+      stock: form.stock === '' ? '' : String(form.stock),
+      compteMugs: String(form.compteMugs),
+    };
     try {
-      await api.multipart('POST', '/produits', { nom: form.nom, prixAchat: form.prixAchat, stock: form.stock }, form.image);
-      setForm(emptyForm);
-      if (fileRef.current) fileRef.current.value = '';
-      setMsg('Produit créé.');
-      load();
-    } catch (err) { setError(err.message); }
-  };
-
-  const maj = async (id, fields, file = null) => {
-    setError(null);
-    try {
-      await api.multipart('PATCH', `/produits/${id}`, fields, file);
-      load();
-    } catch (err) { setError(err.message); }
-  };
-
-  const supprimer = async (p) => {
-    if (!window.confirm(`Supprimer le produit « ${p.nom} » ?`)) return;
-    await api.del(`/produits/${p.id}`);
-    load();
+      if (edition) {
+        await api.multipart('PATCH', `/produits/${produit.id}`, { ...champs, actif: String(form.actif) }, image);
+      } else {
+        await api.multipart('POST', '/produits', { nom: form.nom, ...champs }, image);
+      }
+      onSaved(edition ? 'Produit enregistré' : `Produit « ${form.nom.trim()} » créé`);
+    } catch (err) { setError(err.message); setBusy(false); }
   };
 
   return (
-    <>
-      <h1 className="page-title">Produits (types de mug)</h1>
-      <p className="muted">Catalogue utilisé pour les lignes de commande : nom, prix d'achat, stock et miniature.
-        Le stock se décrémente automatiquement quand une commande entre en production (vide = non suivi).</p>
+    <Modal
+      title={edition ? produit.nom : 'Nouveau produit'}
+      description={edition ? 'Prix d’achat, stock, miniature et options du produit.' : 'Ajoutez un type de mug (ou un accessoire) au catalogue.'}
+      icon={<Coffee />}
+      onClose={onClose}
+      onSubmit={submit}
+      busy={busy}
+      footer={(
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>Annuler</button>
+          <button className="btn btn-primary" disabled={busy}>{busy && <LoaderCircle className="spin" />}{edition ? 'Enregistrer' : 'Créer le produit'}</button>
+        </>
+      )}
+    >
       {error && <div className="alert alert-error">{error}</div>}
-      {msg && <div className="alert alert-info">{msg}</div>}
-
-      <div className="card">
-        <h2>Ajouter un produit</h2>
-        <form onSubmit={creer} className="produit-form">
-          <label>Nom *<input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} required /></label>
-          <label>Prix d'achat (€)
-            <input value={form.prixAchat} onChange={(e) => setForm({ ...form, prixAchat: e.target.value })} placeholder="0.45" />
+      <div className="stack">
+        {!edition && (
+          <label className="field">
+            <span className="field-label">Nom <span className="req">*</span></span>
+            <input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} required placeholder="ex : MUG BLANC MAT" />
           </label>
-          <label>Stock (optionnel)
-            <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="ex : 500" />
+        )}
+        <div className="form-grid">
+          <label className="field">
+            <span className="field-label">Prix d’achat (€)</span>
+            <input value={form.prixAchat} inputMode="decimal" onChange={(e) => setForm({ ...form, prixAchat: e.target.value })} placeholder="0,45" />
           </label>
-          <label>Miniature
-            <input ref={fileRef} type="file" accept="image/*" onChange={(e) => setForm({ ...form, image: e.target.files[0] || null })} />
+          <label className="field">
+            <span className="field-label">Stock disponible</span>
+            <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} placeholder="Non suivi" />
+            <span className="field-hint">Vide = stock non suivi. Se décompte à l’entrée en production.</span>
           </label>
-          <button className="btn btn-primary">Créer</button>
-        </form>
-      </div>
-
-      <div className="card">
-        <h2>Catalogue ({produits.length})</h2>
-        <div className="table-wrap no-clip">
-          <table className="orders">
-            <thead>
-              <tr><th>Miniature</th><th>Nom</th><th className="num">Prix d'achat</th><th className="num">Stock</th><th>Actif</th><th>Compté en mugs</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              {produits.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    {p.image
-                      ? <Thumb src={`/api/produits/${p.id}/image`} alt={p.nom} size={46} />
-                      : <span className="muted">—</span>}
-                  </td>
-                  <td className="strong">{p.nom}</td>
-                  <td className="num">{p.prixAchat != null ? `${p.prixAchat} €` : '—'}</td>
-                  <td className={`num${p.stock != null && p.stock <= 0 ? ' stock-rupture' : ''}`}
-                      title={p.stock != null && p.stock <= 0 ? 'Rupture / stock négatif' : ''}>
-                    {p.stock == null ? '—' : p.stock}
-                  </td>
-                  <td>{p.actif ? '✅' : '🚫'}</td>
-                  <td title={p.compteMugs !== false ? 'Compté dans la quantité de mugs' : 'Accessoire : non compté dans la quantité de mugs'}>
-                    {p.compteMugs !== false ? '✅' : '➖ accessoire'}
-                  </td>
-                  <td className="produit-actions">
-                    <label className="btn btn-ghost btn-xs">
-                      📷 Photo
-                      <input type="file" accept="image/*" hidden
-                             onChange={(e) => e.target.files[0] && maj(p.id, {}, e.target.files[0])} />
-                    </label>
-                    <button className="btn btn-ghost btn-xs"
-                            onClick={() => { const v = prompt('Prix d\'achat (€) :', p.prixAchat ?? ''); if (v !== null) maj(p.id, { prixAchat: v }); }}>
-                      💶 Prix
-                    </button>
-                    <button className="btn btn-ghost btn-xs"
-                            title="Définir le stock disponible (vide = non suivi)"
-                            onClick={() => { const v = prompt('Stock disponible (laisser vide pour ne pas suivre) :', p.stock ?? ''); if (v !== null) maj(p.id, { stock: v }); }}>
-                      📦 Stock
-                    </button>
-                    <button className={`btn btn-xs ${p.actif ? 'btn-ghost' : 'btn-primary'}`}
-                            onClick={() => maj(p.id, { actif: !p.actif })}>
-                      {p.actif ? 'Désactiver' : 'Activer'}
-                    </button>
-                    <button className="btn btn-ghost btn-xs"
-                            title="Un accessoire (étiquette…) n'est pas compté dans la quantité de mugs de la commande"
-                            onClick={() => maj(p.id, { compteMugs: !(p.compteMugs !== false) })}>
-                      {p.compteMugs !== false ? '➖ Accessoire' : '☕ Compter en mugs'}
-                    </button>
-                    <button className="btn btn-danger btn-xs" onClick={() => supprimer(p)}>Suppr.</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        </div>
+        <div className="field">
+          <span className="field-label">Miniature</span>
+          <div className="image-pick">
+            <span className="image-pick-preview">{apercu ? <img src={apercu} alt="" /> : <Coffee />}</span>
+            <div className="stack" style={{ gap: '.35rem' }}>
+              <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => choisirImage(e.target.files[0])} />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
+                <ImagePlus />{apercu ? 'Changer l’image' : 'Choisir une image'}
+              </button>
+              <span className="field-hint">{image ? image.name : 'JPG ou PNG, idéalement carrée.'}</span>
+            </div>
+          </div>
+        </div>
+        <div className="stack" style={{ gap: '.6rem' }}>
+          <Switch checked={form.compteMugs} onChange={(v) => setForm({ ...form, compteMugs: v })}
+                  label="Compté dans la quantité de mugs (décocher pour un accessoire : étiquette…)" />
+          {edition && (
+            <Switch checked={form.actif} onChange={(v) => setForm({ ...form, actif: v })}
+                    label="Actif (proposé dans les lignes de commande)" />
+          )}
         </div>
       </div>
+    </Modal>
+  );
+}
+
+export default function Produits() {
+  usePageTitle('Produits');
+  const toast = useToast();
+  const confirmer = useConfirm();
+  const [produits, setProduits] = useState(null);
+  const [modal, setModal] = useState(null); // { produit } | { nouveau: true }
+
+  const load = async () => setProduits((await api.get('/produits')).produits);
+  useEffect(() => { load().catch((e) => toast.error(e.message)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const maj = async (p, fields, file = null, message = 'Produit mis à jour') => {
+    try {
+      await api.multipart('PATCH', `/produits/${p.id}`, fields, file);
+      toast.success(message);
+      load();
+    } catch (err) { toast.error(err.message); }
+  };
+
+  const supprimer = async (p) => {
+    const ok = await confirmer({
+      title: `Supprimer « ${p.nom} » ?`,
+      message: 'Le produit disparaîtra du catalogue. Les commandes existantes gardent leur type de mug. Pour simplement ne plus le proposer, désactivez-le.',
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/produits/${p.id}`);
+      toast.success('Produit supprimé');
+      load();
+    } catch (err) { toast.error(err.message); }
+  };
+
+  if (!produits) return <><PageHeader title="Produits" /><Loading /></>;
+
+  return (
+    <>
+      <PageHeader
+        title="Produits"
+        subtitle="Types de mug proposés dans les lignes de commande : prix d’achat, stock et miniature. Le stock se décompte quand une commande entre en production."
+        actions={<button className="btn btn-primary" onClick={() => setModal({ nouveau: true })}><Plus />Nouveau produit</button>}
+      />
+
+      {produits.length === 0 ? (
+        <div className="card">
+          <EmptyState icon={<Coffee />} title="Catalogue vide" text="Ajoutez vos types de mug pour les choisir dans les commandes."
+                      action={<button className="btn btn-primary btn-sm" onClick={() => setModal({ nouveau: true })}><Plus />Nouveau produit</button>} />
+        </div>
+      ) : (
+        <div className="product-grid">
+          {produits.map((p) => {
+            const rupture = p.stock != null && p.stock <= 0;
+            return (
+              <div key={p.id} className={`card product-card${p.actif ? '' : ' is-inactive'}`}>
+                <div className="product-media">
+                  {p.image
+                    ? <img src={imageProduit(p)} alt={p.nom} loading="lazy" />
+                    : <span className="placeholder"><Coffee />Pas de miniature</span>}
+                  <span className="product-flags">
+                    {!p.actif && <span className="badge">Inactif</span>}
+                    {p.compteMugs === false && <span className="badge badge-info">Accessoire</span>}
+                  </span>
+                  <label className="btn btn-secondary btn-icon btn-sm product-photo-btn" title="Changer la photo">
+                    <Camera />
+                    <input type="file" accept="image/*" hidden
+                           onChange={(e) => e.target.files[0] && maj(p, {}, e.target.files[0], 'Photo mise à jour')} />
+                  </label>
+                </div>
+                <div className="product-body">
+                  <div className="product-name">{p.nom}</div>
+                  <div className="product-stats">
+                    <div className="product-stat"><span>Prix d’achat</span><strong>{p.prixAchat != null ? fmtEuro(p.prixAchat) : '—'}</strong></div>
+                    <div className={`product-stat${rupture ? ' is-danger' : ''}`} title={rupture ? 'Rupture / stock négatif' : ''}>
+                      <span>Stock</span><strong>{p.stock == null ? 'Non suivi' : fmtNumber(p.stock)}</strong>
+                    </div>
+                  </div>
+                  <div className="product-foot">
+                    <Switch checked={p.actif} label="Actif" onChange={(v) => maj(p, { actif: String(v) }, null, v ? 'Produit activé' : 'Produit désactivé')} />
+                    <span className="row" style={{ gap: '.25rem' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setModal({ produit: p })}><Pencil />Modifier</button>
+                      <button className="btn btn-danger-ghost btn-icon btn-sm" onClick={() => supprimer(p)} title="Supprimer" aria-label={`Supprimer ${p.nom}`}><Trash /></button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {modal && (
+        <ProduitModal
+          produit={modal.produit || null}
+          onClose={() => setModal(null)}
+          onSaved={(message) => { setModal(null); toast.success(message); load(); }}
+        />
+      )}
     </>
   );
 }
+

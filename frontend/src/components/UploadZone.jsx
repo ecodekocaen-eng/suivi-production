@@ -1,20 +1,22 @@
 // ─────────────────────────────────────────────────────────────
-//  Zone d'upload : glisser-déposer + sélection par clic.
+//  Zone d'upload : glisser-déposer + sélection par clic (ou clavier).
 //  categorie "document" : bons de commande, rendus 3D… (types élargis,
 //  conservés après expédition) — sinon visuels de production.
 // ─────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react';
+import { Upload, FilePlus, LoaderCircle } from 'lucide-react';
 import { api } from '../api.js';
+import { useToast } from '../ui/feedback.jsx';
 
 const ACCEPT_VISUELS = 'image/jpeg,image/png,image/gif,image/webp,application/pdf';
 const ACCEPT_DOCS = `${ACCEPT_VISUELS},.doc,.docx,.xls,.xlsx,.csv`;
 
 export default function UploadZone({ commandeId, ligneId = null, onUploaded, compact = false, categorie = 'visuel' }) {
   const inputRef = useRef(null);
+  const toast = useToast();
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState(null);
   const isDoc = categorie === 'document';
 
   // Endpoint : documents, ligne précise, ou visuels au niveau commande.
@@ -25,18 +27,22 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
         : `/commandes/${commandeId}/fichiers`);
 
   const envoyer = async (files) => {
-    if (!files || files.length === 0) return;
-    setError(null);
+    if (!files || files.length === 0 || busy) return;
+    const n = files.length;
     setBusy(true);
     setProgress(0);
     try {
       await api.uploadWithProgress(endpoint, files, setProgress);
+      toast.success(isDoc
+        ? `${n} document${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''}`
+        : `${n} visuel${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''}`);
       onUploaded();
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setBusy(false);
       setProgress(0);
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 
@@ -46,37 +52,36 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
     envoyer(e.dataTransfer.files);
   };
 
+  const titre = isDoc ? 'Ajouter des documents' : (compact ? 'Ajouter des visuels à cette ligne' : 'Ajouter des visuels');
+  const aide = isDoc
+    ? 'Glissez-déposez ou cliquez · PDF, images, Word, Excel, CSV'
+    : (compact
+        ? 'Glissez-déposez ou cliquez · JPG, PNG, GIF, WEBP, PDF'
+        : 'Glissez-déposez ou cliquez · JPG, PNG, GIF, WEBP, PDF — gros fichiers : lien WeTransfer/Smash');
+
   return (
     <div>
       <div
-        className={`dropzone ${dragOver ? 'over' : ''} ${compact ? 'dropzone-sm' : ''}`}
+        className={`dropzone${dragOver ? ' is-over' : ''}${compact ? ' dropzone-compact' : ''}`}
+        role="button"
+        tabIndex={0}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={isDoc ? ACCEPT_DOCS : ACCEPT_VISUELS}
-          hidden
-          onChange={(e) => envoyer(e.target.files)}
-        />
-        {busy
-          ? <span>Envoi en cours… {progress}%</span>
-          : (isDoc
-              ? <span>📎 Ajouter des documents (bon de commande, rendu 3D…)<br />
-                  <small className="muted">JPG, PNG, PDF, Word, Excel, CSV — conservés, jamais supprimés automatiquement</small></span>
-              : (compact
-                  ? <span>📤 Ajouter des visuels à cette ligne</span>
-                  : <span>📤 Glissez-déposez vos visuels ici, ou cliquez pour parcourir<br />
-                      <small className="muted">JPG, PNG, GIF, WEBP, PDF — gros fichiers : utilisez le lien WeTransfer/Smash</small></span>))}
+        <input ref={inputRef} type="file" multiple accept={isDoc ? ACCEPT_DOCS : ACCEPT_VISUELS} hidden
+               onChange={(e) => envoyer(e.target.files)} />
+        <span className="dropzone-icon">
+          {busy ? <LoaderCircle className="spin" /> : (isDoc ? <FilePlus /> : <Upload />)}
+        </span>
+        <span className="dropzone-text">
+          <strong>{busy ? `Envoi en cours… ${progress} %` : titre}</strong>
+          {!busy && <span>{aide}</span>}
+        </span>
       </div>
-      {busy && (
-        <div className="progress"><div className="progress-bar" style={{ width: `${progress}%` }} /></div>
-      )}
-      {error && <div className="alert alert-error">{error}</div>}
+      {busy && <div className="progress"><div className="progress-bar" style={{ width: `${progress}%` }} /></div>}
     </div>
   );
 }

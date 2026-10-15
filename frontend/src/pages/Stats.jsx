@@ -3,48 +3,56 @@
 //  comparée à N-1, charge de production, avancement, top clients, retards.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
+import {
+  Package, ClipboardList, Euro, Recycle, Timer, Factory, Download, TrendingUp, TrendingDown,
+  TriangleAlert, CircleCheck, ChartColumn, Gauge, ChartPie, Users as UsersIcon, Coffee, Wallet,
+} from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { STATUT_LABELS } from '../constants.js';
-import { fmtNumber, fmtMois, fmtDate } from '../format.js';
+import { STATUT_LABELS, STATUT_COLORS } from '../constants.js';
+import { fmtNumber, fmtMois, fmtDate, fmtEuro, plural } from '../format.js';
 import { LineChart, HBars, Donut } from '../components/Charts.jsx';
 import { exportStatsCsv } from '../csv.js';
-import StatutBadge from '../components/StatutBadge.jsx';
+import { StatutBadge } from '../components/Statut.jsx';
+import { PageHeader, Segmented, Loading, EmptyState, usePageTitle } from '../ui/bits.jsx';
 
-const PERIODES = {
-  tout: 'Tout l’historique',
-  mois: 'Mois en cours',
-  annee: 'Du 1er janvier à aujourd’hui',
-  '12m': '12 derniers mois',
-  perso: 'De date à date…',
-};
+const PERIODES = [
+  { value: 'tout', label: 'Tout', title: 'Tout l’historique', long: 'Tout l’historique' },
+  { value: 'mois', label: 'Ce mois', title: 'Mois en cours', long: 'Mois en cours' },
+  { value: 'annee', label: 'Cette année', title: 'Du 1er janvier à aujourd’hui', long: 'Du 1er janvier à aujourd’hui' },
+  { value: '12m', label: '12 mois', title: '12 derniers mois', long: '12 derniers mois' },
+  { value: 'perso', label: 'Dates…', title: 'De date à date', long: 'De date à date' },
+];
 
-const STATUT_COLORS = {
-  'En attente': '#888780',
-  'Impression OK': '#eda100',
-  'En cours de prod': '#2a78d6',
-  'Terminé': '#199e70',
-  'Expédié': '#15803d',
-};
+const COULEUR_PRINCIPALE = '#8a2b36';
 
-function Kpi({ label, value, suffix, delta }) {
+function Kpi({ icon: Icone, label, value, suffix, delta, note }) {
   return (
-    <div className="kpi-card">
-      <span className="kpi-value">{value}{suffix && <em className="kpi-suffix"> {suffix}</em>}</span>
-      <span className="kpi-label">{label}</span>
+    <div className="card kpi">
+      <div className="kpi-head">
+        <span className="kpi-label">{label}</span>
+        <span className="kpi-icon"><Icone /></span>
+      </div>
+      <div className="kpi-value">{value}{suffix && <span className="kpi-suffix"> {suffix}</span>}</div>
       {delta != null && (
-        <span className={`kpi-delta ${delta >= 0 ? 'up' : 'down'}`}>
-          {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% vs préc.
+        <span className="row" style={{ gap: '.4rem' }} title="Par rapport à la période précédente de même durée">
+          <span className={`kpi-delta ${delta >= 0 ? 'up' : 'down'}`}>
+            {delta >= 0 ? <TrendingUp /> : <TrendingDown />}{delta >= 0 ? '+' : '−'}{fmtNumber(Math.abs(delta))} %
+          </span>
+          <span className="kpi-delta-note">vs période préc.</span>
         </span>
       )}
+      {note && <span className="kpi-delta-note">{note}</span>}
     </div>
   );
 }
 
 export default function Stats() {
+  usePageTitle('Statistiques');
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const [data, setData] = useState(null);
+  const [erreur, setErreur] = useState(null);
   const [metric, setMetric] = useState('quantite');
   const [periode, setPeriode] = useState('tout');
   const [debut, setDebut] = useState('');
@@ -56,45 +64,46 @@ export default function Stats() {
   useEffect(() => {
     if (periode === 'perso' && (!debut || !fin)) return;
     setData(null);
+    setErreur(null);
     const qs = periode === 'perso'
       ? `periode=perso&debut=${debut}&fin=${fin}`
       : `periode=${periode}`;
-    api.get(`/stats?${qs}`).then(setData);
+    api.get(`/stats?${qs}`).then(setData).catch((e) => setErreur(e.message));
   }, [periode, debut, fin]);
 
   const periodeLabel = periode === 'perso'
     ? `Du ${fmtDate(debut)} au ${fmtDate(fin)}`
-    : PERIODES[periode];
+    : PERIODES.find((p) => p.value === periode)?.long;
 
   const toolbar = (
     <div className="stats-toolbar">
-      <select value={periode} onChange={(e) => setPeriode(e.target.value)}>
-        {Object.entries(PERIODES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-      </select>
+      <Segmented label="Période" value={periode} onChange={setPeriode} options={PERIODES} />
       {periode === 'perso' && (
         <span className="stats-dates">
-          <input type="date" value={debut} max={fin || undefined} onChange={(e) => setDebut(e.target.value)} />
+          <input type="date" value={debut} max={fin || undefined} onChange={(e) => setDebut(e.target.value)} aria-label="Date de début" />
           <span className="muted">→</span>
-          <input type="date" value={fin} min={debut || undefined} onChange={(e) => setFin(e.target.value)} />
+          <input type="date" value={fin} min={debut || undefined} onChange={(e) => setFin(e.target.value)} aria-label="Date de fin" />
         </span>
       )}
-      <button className="btn btn-primary btn-sm" disabled={!data}
+      <button className="btn btn-secondary btn-sm" disabled={!data}
               onClick={() => data && exportStatsCsv(data, periodeLabel)}>
-        ⬇ Exporter (CSV)
+        <Download />Exporter (CSV)
       </button>
     </div>
+  );
+
+  const entete = (
+    <PageHeader title="Statistiques" subtitle={`Production de mugs · ${periodeLabel}`} actions={toolbar} />
   );
 
   if (!data) {
     return (
       <>
-        <div className="page-head">
-          <h1 className="page-title">Statistiques</h1>
-          {toolbar}
-        </div>
-        <p className="muted">
-          {persoIncomplet ? 'Choisissez une date de début et une date de fin.' : 'Chargement des statistiques…'}
-        </p>
+        {entete}
+        {erreur ? <div className="alert alert-error">{erreur}</div>
+          : persoIncomplet
+            ? <div className="card"><EmptyState icon={<ChartColumn />} title="Choisissez une période" text="Indiquez une date de début et une date de fin." /></div>
+            : <Loading label="Calcul des statistiques…" />}
       </>
     );
   }
@@ -118,124 +127,139 @@ export default function Stats() {
 
   return (
     <>
-      <div className="page-head">
-        <h1 className="page-title">Statistiques</h1>
-        {toolbar}
-      </div>
+      {entete}
 
       {/* KPIs */}
-      <div className="kpis">
-        <Kpi label="Mugs produits" value={fmtNumber(kpis.quantiteTotale)} delta={deltas?.mugs} />
-        <Kpi label="Commandes" value={fmtNumber(kpis.nbCommandes)} delta={deltas?.commandes} />
-        <Kpi label="Coût d'achat ESAT" value={fmtNumber(kpis.coutAchat)} suffix="€" delta={deltas?.cout} />
-        <Kpi label="Taux de rebut" value={kpis.tauxRebut} suffix="%" />
-        <Kpi label="Délai moyen prod." value={kpis.delaiMoyenJours ?? '—'} suffix={kpis.delaiMoyenJours != null ? 'j' : ''} />
-        <Kpi label="À produire" value={fmtNumber(kpis.aProduire)} suffix={`mugs · ${kpis.aProduireCommandes} cmd`} />
-        <Kpi label="Clients" value={fmtNumber(kpis.nbClients)} />
+      <div className="kpi-grid">
+        <Kpi icon={Package} label="Mugs produits" value={fmtNumber(kpis.quantiteTotale)} delta={deltas?.mugs} />
+        <Kpi icon={ClipboardList} label="Commandes" value={fmtNumber(kpis.nbCommandes)} delta={deltas?.commandes}
+             note={plural(kpis.nbClients, 'client')} />
+        <Kpi icon={Euro} label="Coût d’achat ESAT" value={fmtNumber(Math.round(kpis.coutAchat || 0))} suffix="€" delta={deltas?.cout} />
+        <Kpi icon={Factory} label="À produire" value={fmtNumber(kpis.aProduire)} suffix="mugs"
+             note={plural(kpis.aProduireCommandes, 'commande')} />
+        <Kpi icon={Timer} label="Délai moyen" value={kpis.delaiMoyenJours != null ? fmtNumber(kpis.delaiMoyenJours) : '—'}
+             suffix={kpis.delaiMoyenJours != null ? 'jours' : ''} note="De la commande à l’expédition" />
+        <Kpi icon={Recycle} label="Taux de rebut" value={fmtNumber(kpis.tauxRebut)} suffix="%" />
       </div>
 
       {/* Rentabilité (admin) */}
       {isAdmin && marge && (
-        <div className="card span2 marge-card">
-          <div className="card-head">
-            <h2>Rentabilité <span className="admin-tag">admin</span></h2>
-            <span className="muted">{marge.nbCommandes}/{marge.nbTotal} commandes avec prix de vente</span>
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title"><Wallet />Rentabilité <span className="admin-tag">admin</span></h2>
+            <span className="card-subtitle">{marge.nbCommandes} / {marge.nbTotal} commandes avec un prix de vente</span>
           </div>
-          {marge.nbCommandes === 0 ? (
-            <p className="muted">Renseignez un prix de vente sur les commandes pour voir la marge.</p>
-          ) : (
-            <div className="marge-metrics">
-              <div><span className="mm-lbl">Chiffre d'affaires</span><span className="mm-val">{fmtNumber(marge.ca)} €</span></div>
-              <div><span className="mm-lbl">Coût ESAT</span><span className="mm-val">{fmtNumber(marge.cout)} €</span></div>
-              <div><span className="mm-lbl">Marge</span><span className={`mm-val ${marge.marge >= 0 ? 'marge-pos' : 'marge-neg'}`}>{fmtNumber(marge.marge)} €</span></div>
-              <div><span className="mm-lbl">Taux de marge</span><span className="mm-val">{marge.taux != null ? `${marge.taux} %` : '—'}</span></div>
-            </div>
-          )}
+          <div className="card-body">
+            {marge.nbCommandes === 0 ? (
+              <p className="muted">Renseignez un prix de vente sur les commandes pour voir la marge.</p>
+            ) : (
+              <div className="marge-metrics">
+                <div className="mm"><span className="mm-lbl">Chiffre d’affaires</span><span className="mm-val">{fmtEuro(marge.ca)}</span></div>
+                <div className="mm"><span className="mm-lbl">Coût ESAT</span><span className="mm-val">{fmtEuro(marge.cout)}</span></div>
+                <div className="mm"><span className="mm-lbl">Marge</span><span className={`mm-val ${marge.marge >= 0 ? 'marge-pos' : 'marge-neg'}`}>{fmtEuro(marge.marge)}</span></div>
+                <div className="mm"><span className="mm-lbl">Taux de marge</span><span className="mm-val">{marge.taux != null ? `${marge.taux} %` : '—'}</span></div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* Production 12 mois + N-1 */}
-      <div className="card span2">
-        <div className="card-head">
-          <h2>Production sur 12 mois</h2>
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title"><ChartColumn />Production sur 12 mois</h2>
           <div className="stats-toolbar">
             <div className="chart-legend">
-              <span><span className="dot" style={{ background: '#2a78d6' }} />Cette année</span>
-              {hasPrev && <span><span className="dot dash" />Année préc.</span>}
+              <span><span className="swatch" style={{ background: COULEUR_PRINCIPALE }} />Cette année</span>
+              {hasPrev && <span><span className="swatch dash" />Année précédente</span>}
             </div>
-            <div className="toggle">
-              <button className={`btn btn-xs ${metric === 'quantite' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMetric('quantite')}>Mugs</button>
-              <button className={`btn btn-xs ${metric === 'commandes' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setMetric('commandes')}>Commandes</button>
-            </div>
+            <Segmented label="Mesure" value={metric} onChange={setMetric}
+                       options={[{ value: 'quantite', label: 'Mugs' }, { value: 'commandes', label: 'Commandes' }]} />
           </div>
         </div>
-        {mois12.length === 0 ? <p className="muted">Pas assez de données.</p> : (
-          <LineChart
-            labels={labels}
-            series={[
-              { label: 'Cette année', color: '#2a78d6', data: cur },
-              ...(hasPrev ? [{ label: 'Année préc.', color: '#888780', dash: true, data: prev }] : []),
-            ]}
-          />
-        )}
+        <div className="card-body">
+          {mois12.length === 0 ? <p className="muted">Pas assez de données.</p> : (
+            <LineChart
+              labels={labels}
+              series={[
+                { label: 'Cette année', color: COULEUR_PRINCIPALE, data: cur },
+                ...(hasPrev ? [{ label: 'Année préc.', color: '#a8a097', dash: true, data: prev }] : []),
+              ]}
+            />
+          )}
+        </div>
       </div>
 
-      <div className="stats-grid">
+      <div className="grid-2">
         {/* Charge de production */}
         <div className="card">
-          <div className="card-head">
-            <h2>Charge de production</h2>
-            <span className="muted">{fmtNumber(kpis.aProduire)} mugs à produire</span>
+          <div className="card-header">
+            <h2 className="card-title"><Gauge />Charge de production</h2>
+            <span className="card-subtitle">{fmtNumber(kpis.aProduire)} mugs à produire</span>
           </div>
-          <HBars data={charge} labelKey="statut" valueKey="quantite" />
+          <div className="card-body">
+            <HBars data={charge} labelKey="statut" valueKey="quantite" colors={STATUT_COLORS}
+                   labelFormat={(s) => STATUT_LABELS[s] || s} format={(v) => `${fmtNumber(v)} mugs`} />
+          </div>
         </div>
 
         {/* Avancement (hors expédiées) */}
         <div className="card">
-          <h2>Avancement (hors expédiées)</h2>
-          {donutSegments.length === 0
-            ? <p className="muted">Aucune commande en cours.</p>
-            : <Donut segments={donutSegments} />}
+          <div className="card-header"><h2 className="card-title"><ChartPie />Avancement (hors expédiées)</h2></div>
+          <div className="card-body">
+            {donutSegments.length === 0
+              ? <p className="muted">Aucune commande en cours.</p>
+              : <Donut segments={donutSegments} />}
+          </div>
         </div>
 
         {/* Top clients en % */}
         <div className="card">
-          <h2>Top clients (part du volume)</h2>
-          <HBars data={topClients} labelKey="client" valueKey="quantite" max={total}
-                 format={(v) => `${Math.round((v / total) * 100)}%`} />
+          <div className="card-header"><h2 className="card-title"><UsersIcon />Top clients</h2><span className="card-subtitle">Part du volume</span></div>
+          <div className="card-body">
+            <HBars data={topClients} labelKey="client" valueKey="quantite" max={total}
+                   format={(v) => `${Math.round((v / total) * 100)} %`} />
+          </div>
         </div>
 
         {/* Retards */}
         <div className="card">
-          <h2>⚠️ Retards à surveiller</h2>
-          {retards.length === 0 ? <p className="muted">Aucun retard. 👍</p> : (
-            <ul className="retards">
-              {retards.map((r, i) => (
-                <li key={i}>
-                  <div>
-                    <div className="strong">{r.client} · {r.designation}</div>
-                    <div className="muted small">{fmtNumber(r.quantite)} mugs · sortie {fmtDate(r.dateLivraison)}</div>
-                  </div>
-                  <div className="retard-right">
-                    <StatutBadge statut={r.statut} />
-                    <span className="retard-jours">{r.joursRetard} j de retard</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="card-header">
+            <h2 className="card-title"><TriangleAlert />Retards à surveiller</h2>
+            {retards.length > 0 && <span className="badge badge-danger">{retards.length}</span>}
+          </div>
+          <div className="card-body">
+            {retards.length === 0 ? (
+              <div className="row muted"><CircleCheck size={18} className="text-success" />Aucun retard, tout est dans les temps.</div>
+            ) : (
+              <ul className="late-list">
+                {retards.map((r, i) => (
+                  <li key={i}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="strong truncate">{r.client}</div>
+                      <div className="muted small truncate">{r.designation} · {fmtNumber(r.quantite)} mugs · sortie {fmtDate(r.dateLivraison)}</div>
+                    </div>
+                    <div className="late-right">
+                      <span className="badge badge-danger">{r.joursRetard} j de retard</span>
+                      <StatutBadge statut={r.statut} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* Par type de mug */}
         <div className="card">
-          <h2>Par type de mug (mugs)</h2>
-          <HBars data={typesMug} labelKey="type" valueKey="quantite" />
+          <div className="card-header"><h2 className="card-title"><Coffee />Par type de mug</h2><span className="card-subtitle">En mugs</span></div>
+          <div className="card-body"><HBars data={typesMug} labelKey="type" valueKey="quantite" /></div>
         </div>
 
         {/* Par atelier */}
         <div className="card">
-          <h2>Par atelier (commandes)</h2>
-          <HBars data={ateliers} labelKey="atelier" valueKey="count" />
+          <div className="card-header"><h2 className="card-title"><Factory />Par atelier</h2><span className="card-subtitle">En commandes</span></div>
+          <div className="card-body"><HBars data={ateliers} labelKey="atelier" valueKey="count" /></div>
         </div>
       </div>
     </>

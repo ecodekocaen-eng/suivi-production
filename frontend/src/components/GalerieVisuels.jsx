@@ -1,47 +1,62 @@
 // ─────────────────────────────────────────────────────────────
-//  Galerie de visuels : miniatures, téléchargement, suppression, zip.
+//  Galerie de visuels : vignettes (fond damier pour la transparence),
+//  ouverture, téléchargement, suppression (avec confirmation).
 // ─────────────────────────────────────────────────────────────
+import { Download, ExternalLink, Trash, FileText } from 'lucide-react';
 import { api } from '../api.js';
-import { fmtSize, fmtDateTime } from '../format.js';
+import { fmtSize, fmtDate } from '../format.js';
+import { useConfirm, useToast } from '../ui/feedback.jsx';
 
-export default function GalerieVisuels({ commandeId, fichiers, onChange, showZip = true }) {
+export default function GalerieVisuels({ commandeId, fichiers, onChange, lectureSeule = false }) {
   const base = `/api/commandes/${commandeId}/fichiers`;
+  const confirmer = useConfirm();
+  const toast = useToast();
 
   const supprimer = async (f) => {
-    if (!window.confirm(`Supprimer le visuel « ${f.nom} » ?`)) return;
-    await api.del(`${base}/${f.id}`);
-    onChange();
+    const ok = await confirmer({
+      title: 'Supprimer ce visuel ?',
+      message: <>« {f.nom} » sera définitivement supprimé.</>,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`${base}/${f.id}`);
+      toast.success('Visuel supprimé');
+      onChange();
+    } catch (err) { toast.error(err.message); }
   };
 
-  if (fichiers.length === 0) return <p className="muted">Aucun visuel.</p>;
+  if (fichiers.length === 0) return null;
 
   return (
-    <>
-      {showZip && (
-        <div className="gallery-head">
-          <a className="btn btn-primary btn-sm" href={`${base}/zip`}>⬇ Tout télécharger (zip)</a>
-        </div>
-      )}
-      <div className="gallery">
-        {fichiers.map((f) => {
-          const isImage = (f.type || '').startsWith('image/');
-          return (
-            <figure className="thumb" key={f.id}>
-              <a href={`${base}/${f.id}/view`} target="_blank" rel="noopener noreferrer">
-                {isImage
-                  ? <img src={`${base}/${f.id}/view`} alt={f.nom} loading="lazy" />
-                  : <span className="file-icon">📄 PDF</span>}
-              </a>
-              <figcaption title={f.nom}>{f.nom}</figcaption>
-              <div className="thumb-meta muted">{fmtSize(f.taille)} · {fmtDateTime(f.createdAt)}</div>
-              <div className="thumb-actions">
-                <a className="btn btn-ghost btn-xs" href={`${base}/${f.id}/download`}>⬇</a>
-                <button className="btn btn-danger btn-xs" onClick={() => supprimer(f)}>✕</button>
-              </div>
-            </figure>
-          );
-        })}
-      </div>
-    </>
+    <div className="gallery">
+      {fichiers.map((f) => {
+        const isImage = (f.type || '').startsWith('image/');
+        return (
+          <figure className="tile" key={f.id} style={{ margin: 0 }}>
+            <a className="tile-media" href={`${base}/${f.id}/view`} target="_blank" rel="noopener noreferrer" title={`Ouvrir ${f.nom}`}>
+              {isImage
+                ? <img src={`${base}/${f.id}/view`} alt={f.nom} loading="lazy" />
+                : <span className="tile-file"><FileText />PDF</span>}
+            </a>
+            <figcaption className="tile-info">
+              <div className="tile-name" title={f.nom}>{f.nom}</div>
+              <div className="tile-meta">{fmtSize(f.taille)} · {fmtDate(f.createdAt)}</div>
+            </figcaption>
+            <div className="tile-actions">
+              <a className="btn btn-secondary btn-icon btn-xs" href={`${base}/${f.id}/view`} target="_blank" rel="noopener noreferrer"
+                 title="Ouvrir dans un nouvel onglet" aria-label={`Ouvrir ${f.nom}`}><ExternalLink /></a>
+              <a className="btn btn-secondary btn-icon btn-xs" href={`${base}/${f.id}/download`}
+                 title="Télécharger" aria-label={`Télécharger ${f.nom}`}><Download /></a>
+              {!lectureSeule && (
+                <button type="button" className="btn btn-danger-ghost btn-icon btn-xs" onClick={() => supprimer(f)}
+                        title="Supprimer" aria-label={`Supprimer ${f.nom}`}><Trash /></button>
+              )}
+            </div>
+          </figure>
+        );
+      })}
+    </div>
   );
 }

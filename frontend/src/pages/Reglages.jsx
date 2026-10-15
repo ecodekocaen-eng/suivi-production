@@ -1,21 +1,87 @@
 // ─────────────────────────────────────────────────────────────
-//  Bibliothèque des réglages de production par visuel.
+//  Bibliothèque des réglages de presse par visuel.
 //  Recherche + création/modification (clé = visuel) + suppression.
 //  Accessible et modifiable par tout utilisateur connecté.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState, useCallback } from 'react';
+import { Plus, Pencil, Trash, Thermometer, Timer, LoaderCircle, SearchX } from 'lucide-react';
 import { api } from '../api.js';
 import { fmtDate, fmtTemps } from '../format.js';
+import { PageHeader, EmptyState, SearchInput, Loading, usePageTitle } from '../ui/bits.jsx';
+import { useConfirm, useToast } from '../ui/feedback.jsx';
+import Modal from '../ui/Modal.jsx';
 
 const emptyForm = { visuel: '', temperature: '', tempsSecondes: '', note: '' };
 
+function ReglageModal({ reglage = null, onClose, onSaved }) {
+  const [form, setForm] = useState(reglage ? {
+    visuel: reglage.visuel,
+    temperature: reglage.temperature ?? '',
+    tempsSecondes: reglage.tempsSecondes ?? '',
+    note: reglage.note ?? '',
+  } : emptyForm);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null); setBusy(true);
+    try {
+      await api.post('/reglages', form);
+      onSaved(`Réglage « ${form.visuel.trim()} » enregistré`);
+    } catch (err) { setError(err.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title={reglage ? 'Modifier le réglage' : 'Nouveau réglage presse'}
+      description="Température et temps de presse d’un visuel, retrouvés automatiquement sur ses prochaines commandes."
+      icon={<Thermometer />}
+      onClose={onClose}
+      onSubmit={submit}
+      busy={busy}
+      footer={(
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>Annuler</button>
+          <button className="btn btn-primary" disabled={busy}>{busy && <LoaderCircle className="spin" />}Enregistrer</button>
+        </>
+      )}
+    >
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="stack">
+        <label className="field">
+          <span className="field-label">Visuel <span className="req">*</span></span>
+          <input value={form.visuel} onChange={set('visuel')} placeholder="ex : Logo Mairie de Caen" required />
+          <span className="field-hint">Un visuel déjà présent dans la bibliothèque voit son réglage mis à jour.</span>
+        </label>
+        <div className="form-grid">
+          <label className="field">
+            <span className="field-label"><Thermometer size={14} />Température (°C)</span>
+            <input type="number" value={form.temperature} onChange={set('temperature')} placeholder="200" />
+          </label>
+          <label className="field">
+            <span className="field-label"><Timer size={14} />Temps de presse (secondes)</span>
+            <input type="number" value={form.tempsSecondes} onChange={set('tempsSecondes')} placeholder="60" />
+          </label>
+        </div>
+        <label className="field">
+          <span className="field-label">Note</span>
+          <input value={form.note} onChange={set('note')} placeholder="Astuce, pression, sens de pose…" />
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
 export default function Reglages() {
-  const [reglages, setReglages] = useState([]);
+  usePageTitle('Réglages presse');
+  const toast = useToast();
+  const confirmer = useConfirm();
+  const [reglages, setReglages] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState(emptyForm);
-  const [error, setError] = useState(null);
-  const [msg, setMsg] = useState(null);
+  const [modal, setModal] = useState(null); // { reglage } | { nouveau: true }
 
   // Anti-rebond : la recherche (qui interroge la base) n'est lancée que
   // 350 ms après la dernière frappe.
@@ -26,115 +92,104 @@ export default function Reglages() {
 
   const load = useCallback(async () => {
     const qs = search ? `?search=${encodeURIComponent(search)}` : '';
-    setReglages((await api.get(`/reglages${qs}`)).reglages);
-  }, [search]);
+    try {
+      setReglages((await api.get(`/reglages${qs}`)).reglages);
+    } catch (err) { toast.error(err.message); }
+  }, [search, toast]);
 
   useEffect(() => { load(); }, [load]);
 
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  const enregistrer = async (e) => {
-    e.preventDefault();
-    setError(null); setMsg(null);
-    try {
-      await api.post('/reglages', form);
-      setMsg(`Réglage « ${form.visuel.trim()} » enregistré.`);
-      setForm(emptyForm);
-      load();
-    } catch (err) { setError(err.message); }
-  };
-
-  const modifier = (r) => {
-    setForm({
-      visuel: r.visuel,
-      temperature: r.temperature ?? '',
-      tempsSecondes: r.tempsSecondes ?? '',
-      note: r.note ?? '',
-    });
-    setMsg(null); setError(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   const supprimer = async (r) => {
-    if (!window.confirm(`Supprimer le réglage du visuel « ${r.visuel} » ?`)) return;
-    await api.del(`/reglages/${r.id}`);
-    load();
+    const ok = await confirmer({
+      title: 'Supprimer ce réglage ?',
+      message: <>Le réglage du visuel « {r.visuel} » sera supprimé de la bibliothèque.</>,
+      confirmLabel: 'Supprimer',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.del(`/reglages/${r.id}`);
+      toast.success('Réglage supprimé');
+      load();
+    } catch (err) { toast.error(err.message); }
   };
 
   return (
     <>
-      <h1 className="page-title">Réglages de production</h1>
-      <p className="muted">
-        Température et temps de presse par visuel. Renseignés une fois, ils sont
-        retrouvés automatiquement sur chaque nouvelle commande du même visuel.
-      </p>
-      {error && <div className="alert alert-error">{error}</div>}
-      {msg && <div className="alert alert-info">{msg}</div>}
+      <PageHeader
+        title="Réglages presse"
+        subtitle="Température et temps de presse par visuel. Renseignés une fois, ils s’affichent automatiquement sur chaque commande du même visuel."
+        actions={<button className="btn btn-primary" onClick={() => setModal({ nouveau: true })}><Plus />Nouveau réglage</button>}
+      />
 
       <div className="card">
-        <h2>{form.visuel && reglages.some((r) => r.visuel === form.visuel) ? 'Modifier le réglage' : 'Ajouter / modifier un réglage'}</h2>
-        <form onSubmit={enregistrer} className="reglage-form">
-          <label className="reglage-form-visuel">Visuel *
-            <input value={form.visuel} onChange={set('visuel')} placeholder="Logo Mairie de Caen" required />
-          </label>
-          <label>Température (°C)
-            <input type="number" value={form.temperature} onChange={set('temperature')} placeholder="200" />
-          </label>
-          <label>Temps de presse (s)
-            <input type="number" value={form.tempsSecondes} onChange={set('tempsSecondes')} placeholder="60" />
-          </label>
-          <label className="reglage-form-note">Note
-            <input value={form.note} onChange={set('note')} placeholder="astuce, pression, sens de pose…" />
-          </label>
-          <div className="reglage-form-actions">
-            <button className="btn btn-primary">Enregistrer</button>
-            {form.visuel && <button type="button" className="btn btn-ghost" onClick={() => setForm(emptyForm)}>Vider</button>}
-          </div>
-        </form>
-        <p className="hint">Astuce : saisir un visuel déjà présent met à jour son réglage.</p>
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <h2>Bibliothèque ({reglages.length})</h2>
-          <input type="search" placeholder="Rechercher un visuel…" value={searchInput}
-                 onChange={(e) => setSearchInput(e.target.value)} style={{ maxWidth: 260 }} />
+        <div className="toolbar">
+          <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Rechercher un visuel…" />
+          <span className="spacer" />
+          {reglages && <span className="toolbar-info"><span><strong>{reglages.length}</strong> réglage{reglages.length > 1 ? 's' : ''}</span></span>}
         </div>
-        <div className="table-wrap no-clip">
-          <table className="orders">
-            <thead>
-              <tr>
-                <th>Visuel</th>
-                <th className="num">Température</th>
-                <th className="num">Temps de presse</th>
-                <th>Note</th>
-                <th>Dernière utilisation</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {reglages.length === 0 && (
-                <tr><td colSpan="6" className="empty-cell">Aucun réglage enregistré.</td></tr>
-              )}
-              {reglages.map((r) => (
-                <tr key={r.id}>
-                  <td className="strong">{r.visuel}</td>
-                  <td className="num">{r.temperature != null ? `${r.temperature} °C` : '—'}</td>
-                  <td className="num">{fmtTemps(r.tempsSecondes)}</td>
-                  <td>{r.note || '—'}</td>
-                  <td>{r.derniere
-                    ? <span className="muted"><span className="mono">{r.derniere.reference}</span> · {fmtDate(r.derniere.date)}</span>
-                    : <span className="muted">—</span>}</td>
-                  <td className="produit-actions">
-                    <button className="btn btn-ghost btn-xs" onClick={() => modifier(r)}>Modifier</button>
-                    <button className="btn btn-danger btn-xs" onClick={() => supprimer(r)}>Suppr.</button>
-                  </td>
+
+        {!reglages ? <Loading /> : reglages.length === 0 ? (
+          search ? (
+            <EmptyState icon={<SearchX />} title="Aucun résultat" text={`Aucun réglage pour « ${search} ».`} />
+          ) : (
+            <EmptyState icon={<Thermometer />} title="Bibliothèque vide"
+                        text="Enregistrez la température et le temps de presse d’un visuel : ils seront rappelés sur ses prochaines commandes."
+                        action={<button className="btn btn-primary btn-sm" onClick={() => setModal({ nouveau: true })}><Plus />Nouveau réglage</button>} />
+          )
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Visuel</th>
+                  <th>Température</th>
+                  <th>Temps de presse</th>
+                  <th>Note</th>
+                  <th>Dernière commande</th>
+                  <th className="num" aria-label="Actions" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {reglages.map((r) => (
+                  <tr key={r.id}>
+                    <td className="strong">{r.visuel}</td>
+                    <td className="nowrap">
+                      {r.temperature != null
+                        ? <span className="press-val"><Thermometer size={15} className="text-success" />{r.temperature} °C</span>
+                        : <span className="muted">—</span>}
+                    </td>
+                    <td className="nowrap">
+                      {r.tempsSecondes != null
+                        ? <span className="press-val"><Timer size={15} className="text-success" />{fmtTemps(r.tempsSecondes)}</span>
+                        : <span className="muted">—</span>}
+                    </td>
+                    <td className="muted">{r.note || '—'}</td>
+                    <td className="nowrap">
+                      {r.derniere
+                        ? <span className="muted"><span className="ref">{r.derniere.reference}</span> · {fmtDate(r.derniere.date)}</span>
+                        : <span className="muted">—</span>}
+                    </td>
+                    <td className="num nowrap">
+                      <button className="btn btn-ghost btn-sm" onClick={() => setModal({ reglage: r })}><Pencil />Modifier</button>
+                      <button className="btn btn-danger-ghost btn-icon btn-sm" onClick={() => supprimer(r)}
+                              title="Supprimer" aria-label={`Supprimer le réglage de ${r.visuel}`}><Trash /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {modal && (
+        <ReglageModal
+          reglage={modal.reglage || null}
+          onClose={() => setModal(null)}
+          onSaved={(message) => { setModal(null); toast.success(message); load(); }}
+        />
+      )}
     </>
   );
 }

@@ -18,6 +18,9 @@ export const STATUT_LABELS = {
   'Expédié': 'Expédié',
 };
 
+// Statuts affichés par défaut sur le tableau (les commandes « en cours »).
+export const STATUTS_EN_COURS = ['En attente', 'Impression OK', 'En cours de prod'];
+
 // Types de mug courants (suggestions pour l'autocomplétion des lignes).
 export const TYPES_MUG = [
   'MUG BLANC',
@@ -29,11 +32,29 @@ export const TYPES_MUG = [
   'MUG AVEC INSERT BLANC',
 ];
 
+// Ateliers courants (suggestions du champ « Atelier »).
+export const ATELIERS = ['LETTRAGE', 'CONDITIONNEMENT'];
+
 // Classe CSS associée à chaque statut (couleurs définies dans styles.css).
 export const STATUT_CLASS = {
   'En attente': 'st-attente',
   'Impression OK': 'st-impression',
   'En cours de prod': 'st-production',
   'Terminé': 'st-termine',
-  'Expédié': 'st-expediee',
+  'Expédié': 'st-expedie',
+};
+
+// Couleurs « pleines » des statuts (graphiques).
+export const STATUT_COLORS = {
+  'En attente': '#8792a2',
+  'Impression OK': '#8b5cf6',
+  'En cours de prod': '#3b82f6',
+  'Terminé': '#22a35a',
+  'Expédié': '#14a395',
+};
+
+export const ROLE_LABELS = {
+  ADMIN: 'Administrateur',
+  OPERATEUR: 'Opérateur',
+  COMPTABLE: 'Comptable',
 };
