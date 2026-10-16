@@ -279,6 +279,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
   const [fichiers, setFichiers] = useState([]);
   const [busy, setBusy] = useState(false);
   const [fait, setFait] = useState(0);
+  const [total, setTotal] = useState(0); // fixé au lancement (la liste à importer raccourcit en cours de route)
 
   const ajouter = (liste) => setFichiers((avant) => [
     ...avant,
@@ -303,6 +304,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
   const importer = async () => {
     setBusy(true);
     setFait(0);
+    setTotal(aImporter.length);
     let erreurs = 0;
     for (const f of aImporter) {
       maj(f.id, { etat: 'en-cours', message: '' });
@@ -318,7 +320,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
           console.warn('Vignette impossible :', f.file.name, err);
         }
         await api.post('/modeles', {
-          reference, nom: f.nom, client, typeMug, fichier: { pathname: chemin, nom: f.file.name }, apercu,
+          reference, nom: f.nom, client, typeMug, fichier: { pathname: chemin, nom: f.file.name.normalize('NFC') }, apercu,
         });
         maj(f.id, { etat: 'ok' });
       } catch (err) {
@@ -348,7 +350,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>{termine ? 'Fermer' : 'Annuler'}</button>
           {!termine && (
             <button type="button" className="btn btn-primary" onClick={importer} disabled={busy || aImporter.length === 0}>
-              {busy ? <><LoaderCircle className="spin" />{fait} / {aImporter.length}…</> : <><Upload />Importer {plural(aImporter.length, 'modèle')}</>}
+              {busy ? <><LoaderCircle className="spin" />{fait} / {total}…</> : <><Upload />Importer {plural(aImporter.length, 'modèle')}</>}
             </button>
           )}
         </>
@@ -364,7 +366,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
           titre="Glissez-déposez les fichiers d’impression"
           aide="PDF ou images · plusieurs fichiers à la fois · une vignette est créée pour chacun"
         />
-        {busy && <div className="progress"><div className="progress-bar" style={{ width: `${aImporter.length ? (fait / aImporter.length) * 100 : 0}%` }} /></div>}
+        {busy && <div className="progress"><div className="progress-bar" style={{ width: `${total ? (fait / total) * 100 : 0}%` }} /></div>}
         <div className="form-grid">
           <label className="field">
             <span className="field-label">Client</span>

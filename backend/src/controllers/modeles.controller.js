@@ -24,6 +24,9 @@ const VALIDITE_LIEN_MS = 30 * 60 * 1000;
 // Référence d'un modèle : lettres et chiffres séparés par des tirets, ex. 104HE-22, 104HE-98B.
 const FORMAT_REFERENCE = /^[A-Z0-9]+(?:-[A-Z0-9]+)+$/;
 
+// Accents décomposés (noms de fichiers venus d'un Mac) → forme usuelle, pour la recherche.
+const nfc = (s) => (s == null ? s : String(s).normalize('NFC'));
+
 export const normRef = (r) => String(r ?? '').trim().toUpperCase().replace(/\s+/g, '');
 
 function httpError(status, message) {
@@ -134,10 +137,10 @@ export async function enregistrer(req, res) {
 
   const avant = await prisma.modele.findUnique({ where: { reference } });
   const data = {
-    nom: cleanStr(req.body.nom) || avant?.nom || reference,
-    client: cleanStr(req.body.client) ?? avant?.client ?? null,
+    nom: nfc(cleanStr(req.body.nom)) || avant?.nom || reference,
+    client: nfc(cleanStr(req.body.client)) ?? avant?.client ?? null,
     typeMug: cleanStr(req.body.typeMug) ?? avant?.typeMug ?? null,
-    fichierNom: String(fichier.nom || fichier.pathname.split('/').pop()).slice(0, 200),
+    fichierNom: nfc(String(fichier.nom || fichier.pathname.split('/').pop())).slice(0, 200),
     fichierChemin: fichier.pathname,
     fichierTaille: infos.taille,
     fichierType: infos.type,

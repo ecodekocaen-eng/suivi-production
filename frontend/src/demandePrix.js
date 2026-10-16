@@ -48,7 +48,8 @@ export function analyserDemande(lignesTexte) {
 // Référence et nom d'un modèle d'après le nom de son fichier. Sans référence
 // au début du nom (ex. « EXE Mug Flers.pdf »), reference est vide.
 export function lireNomFichier(nomFichier) {
-  const base = String(nomFichier || '').replace(/\.[a-z0-9]{2,4}$/i, '').trim();
+  // Noms venus d'un Mac (zip Smash…) : accents décomposés (NFD) → forme usuelle (NFC).
+  const base = String(nomFichier || '').normalize('NFC').replace(/\.[a-z0-9]{2,4}$/i, '').trim();
   const m = base.match(/^([A-Za-z0-9]{2,}-[A-Za-z0-9]+)(?:[\s_-]+(.*))?$/);
   if (!m) return { reference: '', nom: base };
   const nom = (m[2] || '')
