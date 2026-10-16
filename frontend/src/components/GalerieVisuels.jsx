@@ -21,7 +21,8 @@ export default function GalerieVisuels({ commandeId, fichiers, onChange, lecture
     });
     if (!ok) return;
     try {
-      await api.del(`${base}/${f.id}`);
+      // `base` sert aux liens du navigateur ; api.* ajoute déjà « /api ».
+      await api.del(`/commandes/${commandeId}/fichiers/${f.id}`);
       toast.success('Visuel supprimé');
       onChange();
     } catch (err) { toast.error(err.message); }

@@ -32,7 +32,8 @@ export default function DocumentsList({ commandeId, fichiers, onChange }) {
     });
     if (!ok) return;
     try {
-      await api.del(`${base}/${f.id}`);
+      // `base` sert aux liens du navigateur ; api.* ajoute déjà « /api ».
+      await api.del(`/commandes/${commandeId}/fichiers/${f.id}`);
       toast.success('Document supprimé');
       onChange();
     } catch (err) { toast.error(err.message); }

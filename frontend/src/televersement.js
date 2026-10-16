@@ -38,10 +38,13 @@ export const libelleTailleMax = (octets) => (octets ? `jusqu’à ${fmtSize(octe
 // Nom sûr pour le stockage (sans accents ni caractères spéciaux), extension conservée.
 function nomSur(nom) {
   const point = nom.lastIndexOf('.');
-  const ext = point > 0 ? nom.slice(point).toLowerCase().replace(/[^a-z0-9.]/g, '') : '';
+  const ext = point > 0 ? nom.slice(point).toLowerCase().replace(/[^a-z0-9.]/g, '').slice(0, 20) : '';
+  // Pas de « .. » dans le chemin (le serveur le refuse) : points répétés fusionnés,
+  // points en début et fin de nom retirés (« logo..png » → « logo.png »).
   const base = (point > 0 ? nom.slice(0, point) : nom)
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^A-Za-z0-9._-]/g, '_').replace(/.{2,}/g, '.').slice(0, 80) || 'fichier';
+    .replace(/[^A-Za-z0-9._-]/g, '_').replace(/\.{2,}/g, '.')
+    .slice(0, 80).replace(/^\.+|\.+$/g, '') || 'fichier';
   return `${base}${ext}`;
 }
 

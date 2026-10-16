@@ -87,7 +87,8 @@ export function fmtSize(bytes) {
   if (!bytes && bytes !== 0) return '';
   if (bytes < 1024) return `${bytes} o`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  // À la française : « 12,5 Mo », « 100 Mo » (pas de « ,0 »).
+  return `${(bytes / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`;
 }
 
 // Pluriel simple : plural(3, 'mug') → '3 mugs'.
