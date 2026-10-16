@@ -4,8 +4,9 @@
 //  cette fonction ne gère que /api/* (voir vercel.json).
 // ─────────────────────────────────────────────────────────────
 import { createApp } from '../backend/src/app.js';
-import { ensureAdmin } from '../backend/src/bootstrap.js';
+import { ensureAdmin, ensureSchema } from '../backend/src/bootstrap.js';
 
+await ensureSchema();
 await ensureAdmin();
 
 const app = createApp();

@@ -18,7 +18,7 @@ function useMedia(requete) {
 }
 import { Routes, Route, Navigate, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  ClipboardList, Thermometer, ChartColumn, Receipt, Building, Coffee, UserCog,
+  ClipboardList, Thermometer, Database, ChartColumn, Receipt, Building, Coffee, UserCog,
   LogOut, PanelLeftClose, PanelLeftOpen, Menu,
 } from 'lucide-react';
 import { useAuth } from './auth.jsx';
@@ -33,6 +33,7 @@ import Stats from './pages/Stats.jsx';
 import Clients from './pages/Clients.jsx';
 import Produits from './pages/Produits.jsx';
 import Reglages from './pages/Reglages.jsx';
+import BaseModeles from './pages/BaseModeles.jsx';
 import Facturation from './pages/Facturation.jsx';
 import ReleveDetail from './pages/ReleveDetail.jsx';
 import Users from './pages/Users.jsx';
@@ -64,6 +65,7 @@ function sectionsPour(user) {
       titre: 'Production',
       liens: production ? [
         { to: '/', label: 'Tableau de suivi', icon: ClipboardList, actif: (p) => p === '/' || p.startsWith('/commandes') },
+        { to: '/base', label: 'Base de données', icon: Database },
         { to: '/reglages', label: 'Réglages presse', icon: Thermometer },
       ] : [],
     },
@@ -180,6 +182,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protected wide><Dashboard /></Protected>} />
       <Route path="/commandes/:id" element={<Protected><CommandeDetail /></Protected>} />
+      <Route path="/base" element={<Protected wide><BaseModeles /></Protected>} />
       <Route path="/reglages" element={<Protected><Reglages /></Protected>} />
       <Route path="/statistiques" element={<Protected><Stats /></Protected>} />
       <Route path="/facturation" element={<Protected allow={peutFacturer}><Facturation /></Protected>} />

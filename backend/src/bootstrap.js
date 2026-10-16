@@ -30,3 +30,33 @@ export async function ensureAdmin() {
     console.error('Auto-seed admin ignoré :', err.message);
   }
 }
+
+// Tables ajoutées après la mise en service : la base PostgreSQL de production
+// n'est pas migrée automatiquement, on crée donc ici ce qui manque (sans jamais
+// toucher aux tables existantes). SQL identique à ce que créerait `prisma db push`
+// pour schema.postgres.prisma. En local (SQLite) : `npm run prisma:push`.
+let schemaOk = false;
+export async function ensureSchema() {
+  if (schemaOk || !/^postgres/i.test(process.env.DATABASE_URL || '')) return;
+  try {
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Modele" (
+      "id" SERIAL NOT NULL,
+      "reference" TEXT NOT NULL,
+      "nom" TEXT NOT NULL,
+      "client" TEXT,
+      "typeMug" TEXT,
+      "fichierNom" TEXT,
+      "fichierChemin" TEXT,
+      "fichierTaille" INTEGER,
+      "fichierType" TEXT,
+      "apercuChemin" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "Modele_pkey" PRIMARY KEY ("id")
+    )`);
+    await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Modele_reference_key" ON "Modele"("reference")');
+    schemaOk = true;
+  } catch (err) {
+    console.error('Création des tables manquantes :', err.message);
+  }
+}

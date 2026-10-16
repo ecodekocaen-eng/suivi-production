@@ -9,7 +9,7 @@ import { parseFrDate, parseIntSafe, parsePrice, cleanStr } from '../utils/parse.
 
 // Construit un objet de données validé à partir du corps de requête.
 // partial=true : ne renvoie que les champs présents (pour une mise à jour).
-function buildData(body, { partial = false } = {}) {
+export function buildData(body, { partial = false } = {}) {
   const data = {};
   const setIf = (key, value) => {
     if (!partial || body[key] !== undefined) data[key] = value;
@@ -50,7 +50,7 @@ function buildData(body, { partial = false } = {}) {
 // Nettoie le tableau de lignes envoyé par le formulaire.
 // Retourne undefined si le champ n'est pas fourni (pour ne pas toucher aux lignes),
 // ou un tableau filtré (lignes vides ignorées).
-function buildLignes(body) {
+export function buildLignes(body) {
   if (body.lignes === undefined) return undefined;
   const arr = Array.isArray(body.lignes) ? body.lignes : [];
   return arr
@@ -67,7 +67,7 @@ function buildLignes(body) {
 }
 
 // Le prix de vente (et donc la marge) est réservé aux ADMIN.
-function masquerMarge(commande, role) {
+export function masquerMarge(commande, role) {
   if (!commande || role === 'ADMIN') return commande;
   const { prixVente, ...reste } = commande;
   return reste;

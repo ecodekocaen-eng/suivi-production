@@ -109,7 +109,7 @@ async function cibleDirecte(req, { ligneId, categorie }) {
 
 // Le chemin proposé par le navigateur doit rester dans le dossier de la commande :
 // <dossier>/<identifiant>/<nom de fichier sûr> — ni remontée, ni sous-dossier en plus.
-function cheminValide(pathname, prefixe) {
+export function cheminValide(pathname, prefixe) {
   if (typeof pathname !== 'string' || !pathname.startsWith(prefixe) || pathname.length > 300) return false;
   return /^[A-Za-z0-9_-]{6,40}\/[A-Za-z0-9._-]{1,120}$/.test(pathname.slice(prefixe.length))
     && !pathname.includes('..');
@@ -184,9 +184,10 @@ export async function enregistrerDirect(req, res) {
 
 // Le contenu d'un fichier est immuable (clé de stockage unique, jamais
 // remplacé) : on autorise un cache navigateur long et un 304 sans relire le Blob.
+const etiquette = (fichier) => `"${fichier.nomStockage || fichier.chemin}"`;
 function cacheFichier(res, fichier) {
   res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-  res.setHeader('ETag', `"${fichier.nomStockage}"`);
+  res.setHeader('ETag', etiquette(fichier));
 }
 
 // En-tête de téléchargement qui garde les accents du nom d'origine.
@@ -198,10 +199,11 @@ function contentDisposition(nom) {
 
 // Sert un fichier : d'un bloc s'il est petit, en flux s'il est gros (rien n'est
 // alors chargé entièrement en mémoire, et la réponse peut dépasser 4,5 Mo sur Vercel).
-async function envoyerFichier(req, res, fichier, { telechargement = false } = {}) {
+// `fichier` : { chemin, url?, nom, taille, type, nomStockage? } (aussi les fichiers des modèles).
+export async function envoyerFichier(req, res, fichier, { telechargement = false } = {}) {
   cacheFichier(res, fichier);
   // Revalidation : si le navigateur a déjà la bonne version, on évite la lecture du stockage.
-  if (req.headers['if-none-match'] === `"${fichier.nomStockage}"`) return res.status(304).end();
+  if (req.headers['if-none-match'] === etiquette(fichier)) return res.status(304).end();
   if (telechargement) res.setHeader('Content-Disposition', contentDisposition(fichier.nom));
   if (!fichier.taille || fichier.taille <= SEUIL_FLUX) {
     try {

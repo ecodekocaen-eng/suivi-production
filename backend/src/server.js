@@ -4,12 +4,13 @@
 import fs from 'node:fs';
 import { createApp } from './app.js';
 import { config } from './config.js';
-import { ensureAdmin } from './bootstrap.js';
+import { ensureAdmin, ensureSchema } from './bootstrap.js';
 import { STORAGE_DRIVER } from './storage.js';
 
 // Le dossier d'upload n'est utile qu'en stockage disque.
 if (STORAGE_DRIVER === 'disk') fs.mkdirSync(config.uploadDir, { recursive: true });
 
+await ensureSchema();
 await ensureAdmin();
 
 const app = createApp();

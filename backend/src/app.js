@@ -26,6 +26,7 @@ import produitsRoutes from './routes/produits.routes.js';
 import reglagesRoutes from './routes/reglages.routes.js';
 import facturationRoutes from './routes/facturation.routes.js';
 import cronRoutes from './routes/cron.routes.js';
+import modelesRoutes from './routes/modeles.routes.js';
 
 export function createApp() {
   const app = express();
@@ -65,6 +66,7 @@ export function createApp() {
   // Sous-routes fichiers (déclarées avant pour le préfixe plus spécifique).
   app.use('/api/commandes/:id/fichiers', fichiersRoutes);
   app.use('/api/commandes', commandesRoutes);
+  app.use('/api/modeles', modelesRoutes);
 
   // En production, sert le frontend React compilé (déploiement mono-port).
   // Le build est attendu dans frontend/dist (voir Dockerfile / README).

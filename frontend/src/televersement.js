@@ -116,3 +116,31 @@ export async function envoyerFichiers({ commandeId, ligneId = null, categorie = 
   onProgress?.(100);
   return { fichiers };
 }
+
+/**
+ * Dépose un fichier d'un modèle de la base de données (fichier d'impression ou
+ * vignette) dans le stockage, sous modeles/<REF>/ ; renvoie son chemin, à
+ * inscrire ensuite avec POST /modeles. En ligne : envoi direct vers Vercel Blob.
+ */
+export async function deposerFichierModele(reference, fichier, nom = fichier.name) {
+  const reglages = await chargerReglagesEnvoi();
+  if (reglages.mode !== 'direct') {
+    const fd = new FormData();
+    fd.append('reference', reference);
+    fd.append('fichier', fichier, nom);
+    const res = await fetch('/api/modeles/fichiers', { method: 'POST', credentials: 'include', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+    return data.pathname;
+  }
+  const { uploadPresigned } = await import('@vercel/blob/client');
+  const pathname = `${reglages.prefixe || ''}modeles/${reference}/${identifiant()}/${nomSur(nom)}`;
+  await uploadPresigned(pathname, fichier, {
+    access: 'private',
+    handleUploadUrl: '/api/modeles/direct',
+    clientPayload: JSON.stringify({ reference }),
+    contentType: fichier.type || undefined,
+    multipart: fichier.size > SEUIL_MULTIPART,
+  });
+  return pathname;
+}

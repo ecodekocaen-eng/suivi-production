@@ -117,3 +117,32 @@ export async function infosBlob(pathname) {
   const { head } = await import('@vercel/blob');
   return head(pathname);
 }
+
+const TYPES_PAR_EXTENSION = {
+  '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp',
+};
+
+// Taille et type réels d'un fichier déjà stocké (contrôle avant de l'inscrire en base).
+export async function infosFichier(key) {
+  if (STORAGE_DRIVER === 'blob') {
+    const infos = await infosBlob(key);
+    return { taille: infos.size, type: infos.contentType, url: infos.url };
+  }
+  const st = await fs.promises.stat(absPath(key));
+  return { taille: st.size, type: TYPES_PAR_EXTENSION[path.extname(key).toLowerCase()] || 'application/octet-stream', url: null };
+}
+
+// Copie un fichier vers une autre clé (ex. fichier d'un modèle → ligne de commande).
+// Clés complètes (préfixe d'essai compris), telles qu'enregistrées en base.
+export async function copyKey(fromKey, toKey, contentType) {
+  if (STORAGE_DRIVER === 'blob') {
+    const { copy } = await import('@vercel/blob');
+    const res = await copy(fromKey, toKey, { access: 'private', contentType, addRandomSuffix: false });
+    return { key: toKey, url: res.url };
+  }
+  const dest = absPath(toKey);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  await fs.promises.copyFile(absPath(fromKey), dest);
+  return { key: toKey, url: null };
+}

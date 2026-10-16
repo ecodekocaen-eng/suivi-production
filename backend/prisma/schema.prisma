@@ -190,3 +190,23 @@ model Log {
 
   @@index([commandeId])
 }
+
+// Base de données des modèles (ex. mugs Heula) : une référence client → son
+// fichier d'impression et une vignette. Sert à préparer une commande à partir
+// d'une « Demande de prix ». Fichiers sous modeles/ : jamais purgés.
+// ⚠️ En production, la table est créée au démarrage (bootstrap.js › ensureSchema) :
+// garder le SQL de création identique à ce modèle.
+model Modele {
+  id            Int      @id @default(autoincrement())
+  reference     String   @unique // en majuscules, ex. 104HE-22
+  nom           String // ex. Mug Je t'aime
+  client        String? // ex. HEULA
+  typeMug       String? // produit proposé pour la ligne de commande
+  fichierNom    String? // nom d'origine du fichier d'impression
+  fichierChemin String? // clé de stockage du fichier d'impression
+  fichierTaille Int?
+  fichierType   String?
+  apercuChemin  String? // vignette PNG générée à l'import
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
