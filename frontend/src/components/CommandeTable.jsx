@@ -3,7 +3,7 @@
 //  Statut modifiable sur place ; un clic sur la ligne ouvre la fiche.
 // ─────────────────────────────────────────────────────────────
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, Paperclip, Package, CalendarClock } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, Paperclip, Package, CalendarClock, Mail, MailOpen } from 'lucide-react';
 import { StatutSelect, Echeance } from './Statut.jsx';
 import Thumb, { imageProduit } from './Thumb.jsx';
 import { fmtDate, fmtNumber, echeance } from '../format.js';
@@ -21,12 +21,39 @@ function Th({ label, col, sortBy, sortDir, onSort, className = '' }) {
   );
 }
 
+// Non lue = personne ne l'a encore ouverte, ou quelqu'un l'a remise en non lue.
 const estNouvelle = (c) => !c.ouverteAt && !c.supprime;
 const sortie = (c) => c.dateSortieTexte || (c.dateLivraison ? fmtDate(c.dateLivraison) : '—');
 // « ASAP » / « URGENT » : la puce d'échéance suffit, inutile de répéter le texte.
 const texteSortie = (c) => (echeance(c)?.type === 'asap' ? null : sortie(c));
 
-export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, sortDir, onSort, onStatutChange, compact = false }) {
+// Pastille lu / non lu (pleine = non lue) ; un clic bascule sans ouvrir la commande.
+function PastilleLecture({ commande, onChange }) {
+  const nonLue = estNouvelle(commande);
+  if (commande.supprime) return <span className="lu-dot is-empty" />;
+  return (
+    <button type="button" className={`lu-dot${nonLue ? ' is-unread' : ''}`}
+            onClick={(e) => { e.stopPropagation(); onChange?.(commande, nonLue); }}
+            title={nonLue ? 'Non lue · cliquer pour la marquer comme lue' : 'Lue · cliquer pour la remettre en non lue'}
+            aria-label={nonLue ? 'Marquer comme lue' : 'Marquer comme non lue'} />
+  );
+}
+
+// Même bascule, en bouton enveloppe affiché au survol de la ligne.
+function BoutonLecture({ commande, onChange }) {
+  if (commande.supprime) return null;
+  const nonLue = estNouvelle(commande);
+  const Icone = nonLue ? MailOpen : Mail;
+  const libelle = nonLue ? 'Marquer comme lue' : 'Marquer comme non lue';
+  return (
+    <button type="button" className="lu-btn" title={libelle} aria-label={libelle}
+            onClick={(e) => { e.stopPropagation(); onChange?.(commande, nonLue); }}>
+      <Icone />
+    </button>
+  );
+}
+
+export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, sortDir, onSort, onStatutChange, onLectureChange, compact = false }) {
   const navigate = useNavigate();
   const ouvrir = (c) => navigate(`/commandes/${c.id}`);
   const tri = { sortBy, sortDir, onSort };
@@ -59,11 +86,13 @@ export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, s
                   onClick={() => ouvrir(c)}
                 >
                   <td className="col-ref">
-                    {/* Vrai lien : accessible au clavier (Tab + Entrée) et ouvrable dans un nouvel onglet. */}
-                    <Link to={`/commandes/${c.id}`} className="ref ref-link" onClick={(e) => e.stopPropagation()}>
-                      {estNouvelle(c) && <span className="new-dot" title="Commande jamais ouverte" />}
-                      {c.reference}
-                    </Link>
+                    <div className="ref-cell">
+                      <PastilleLecture commande={c} onChange={onLectureChange} />
+                      {/* Vrai lien : accessible au clavier (Tab + Entrée) et ouvrable dans un nouvel onglet. */}
+                      <Link to={`/commandes/${c.id}`} className="ref ref-link" onClick={(e) => e.stopPropagation()}>
+                        {c.reference}
+                      </Link>
+                    </div>
                   </td>
                   <td className="col-client">
                     <span className="cell-main cell-trunc" title={c.client}>{c.client}</span>
@@ -96,7 +125,12 @@ export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, s
                       <span className="files-count" title={`${c._count.fichiers} fichier(s)`}><Paperclip />{c._count.fichiers}</span>
                     )}
                   </td>
-                  <td className="col-go"><span className="go"><ChevronRight /></span></td>
+                  <td className="col-go">
+                    <div className="go-cell">
+                      <BoutonLecture commande={c} onChange={onLectureChange} />
+                      <span className="go"><ChevronRight /></span>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -113,7 +147,7 @@ export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, s
                  role="link" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') ouvrir(c); }}>
               <div className="order-card-top">
                 <span className="ref">
-                  {estNouvelle(c) && <span className="new-dot" />}
+                  <PastilleLecture commande={c} onChange={onLectureChange} />
                   {c.reference}
                 </span>
                 <span onClick={(e) => e.stopPropagation()}>

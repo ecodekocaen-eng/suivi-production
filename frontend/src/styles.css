@@ -516,10 +516,49 @@ input:disabled, select:disabled, textarea:disabled { background: var(--surface-3
 .files-count svg { width: 14px; height: 14px; }
 .qty { font-weight: 650; font-variant-numeric: tabular-nums; }
 
-.orders-table tr.is-new td { background: #fdf8f9; }
-.orders-table tr.is-new:hover td { background: #faf0f2; }
+/* ── Lu / non lu ─────────────────────────────────────────── */
+.ref-cell { display: flex; align-items: center; gap: .3rem; }
+/* Pastille : pleine = non lue, cercle = lue. C'est aussi un bouton de bascule. */
+.lu-dot {
+  appearance: none; border: 0; background: none; padding: 0; margin: -4px 0 -4px -6px;
+  width: 20px; height: 20px; flex: none; display: inline-grid; place-items: center; border-radius: 50%; cursor: pointer;
+}
+.lu-dot::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--border-2);
+  transition: transform .15s var(--ease), background .15s, box-shadow .15s;
+}
+.lu-dot.is-unread::before { background: var(--brand); box-shadow: 0 0 0 3px var(--brand-100); }
+.lu-dot:hover::before { transform: scale(1.3); }
+.lu-dot:not(.is-unread):hover::before { box-shadow: inset 0 0 0 1.5px var(--brand); }
+.lu-dot:focus-visible { outline: 2px solid var(--brand-ring); outline-offset: 0; }
+.lu-dot.is-empty { visibility: hidden; cursor: default; }
+/* Enveloppe au survol de la ligne, à côté de la flèche. */
+.go-cell { display: flex; align-items: center; justify-content: flex-end; gap: .1rem; }
+.lu-btn {
+  appearance: none; border: 0; background: none; padding: .3rem; border-radius: var(--radius-sm); color: var(--muted);
+  display: inline-flex; cursor: pointer; opacity: 0; transition: opacity .12s, color .12s, background .12s;
+}
+.lu-btn svg { width: 16px; height: 16px; }
+.orders-table tr:hover .lu-btn, .lu-btn:focus-visible { opacity: 1; }
+.lu-btn:hover { color: var(--brand); background: var(--brand-50); }
+.lu-btn:focus-visible { outline: 2px solid var(--brand-ring); }
+/* Non lue = gras et foncé ; lue = plus léger, pour que les non lues sautent aux yeux. */
+.orders-table tr.is-new .cell-main, .order-card.is-new .cell-main { font-weight: 700; color: var(--text); }
+.orders-table tr.is-new .ref-link, .order-card.is-new .ref { font-weight: 700; color: var(--text); }
+.orders-table tr:not(.is-new) .cell-main, .order-card:not(.is-new) .cell-main { font-weight: 500; color: var(--text-2); }
+.orders-table tr:not(.is-new) .ref-link { font-weight: 500; color: var(--muted); }
+.orders-table tr .ref-link:hover { color: var(--brand); }
+/* Non lues surlignées : fond teinté et barre bordeaux à gauche. Dans le tableau, la pastille
+   ne se montre que sur les non lues (bascule par l'enveloppe au survol) ; sur les cartes
+   (écran tactile, pas de survol), le cercle des lues reste visible pour basculer d'un toucher. */
+.orders-table tr:not(.is-new) .lu-dot { visibility: hidden; }
+.orders-table tr.is-new td { background: var(--brand-50); }
+.orders-table tr.is-new:hover td { background: #f8ecee; }
 .orders-table tr.is-new td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
-.orders-table tr.is-new .cell-main { color: var(--brand-700); }
+.order-card.is-new { background: var(--brand-50); box-shadow: inset 3px 0 0 var(--brand); }
+/* Au doigt : zone de toucher plus grande, même petit cercle. */
+.order-card .lu-dot { width: 34px; height: 34px; margin: -12px -6px -12px -13px; }
+
 .orders-table tr.is-deleted td { opacity: .6; }
 .orders-table tr.is-deleted .cell-main { text-decoration: line-through; text-decoration-color: var(--faint); }
 
@@ -554,7 +593,6 @@ input:disabled, select:disabled, textarea:disabled { background: var(--surface-3
 }
 .order-card { display: flex; flex-direction: column; gap: .55rem; padding: .95rem 1rem; border-bottom: 1px solid var(--border); cursor: pointer; }
 .order-card:last-child { border-bottom: 0; }
-.order-card.is-new { background: #fdf8f9; box-shadow: inset 3px 0 0 var(--brand); }
 .order-card-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .order-card-foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
 .order-card .meta { display: flex; align-items: center; gap: .75rem; color: var(--muted); font-size: .84rem; flex-wrap: wrap; }

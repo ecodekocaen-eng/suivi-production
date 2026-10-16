@@ -17,6 +17,7 @@ router.post('/', asyncHandler(c.create));
 router.get('/:id', asyncHandler(c.show));
 router.patch('/:id', asyncHandler(c.update));
 router.patch('/:id/statut', asyncHandler(c.updateStatut));
+router.patch('/:id/lecture', asyncHandler(c.updateLecture));
 
 // Suppression (corbeille) et restauration : ADMIN uniquement.
 router.delete('/:id', requireAdmin, asyncHandler(c.remove));

@@ -8,7 +8,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Pencil, Download, Trash, ArchiveRestore, Package, CalendarClock, CalendarDays, Factory, Euro,
   Layers, FolderOpen, Info, Check, Undo2, Truck, MessageSquareText, Link2, ExternalLink, ListChecks,
-  ScrollText, Plus, Upload, Flag, Thermometer, CircleDot, FileX, Receipt,
+  ScrollText, Plus, Upload, Flag, Thermometer, CircleDot, FileX, Receipt, Mail,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -172,6 +172,15 @@ export default function CommandeDetail() {
     } catch (err) { toast.error(err.message); }
   };
 
+  // Retour au tableau aussitôt : rouvrir la fiche la marquerait de nouveau comme lue.
+  const remettreNonLue = async () => {
+    try {
+      await api.patch(`/commandes/${id}/lecture`, { lue: false });
+      toast.success(<>Commande <strong>{commande.reference}</strong> remise en non lue</>);
+      navigate('/');
+    } catch (err) { toast.error(err.message); }
+  };
+
   const restaurer = async () => {
     try {
       await api.post(`/commandes/${id}/restore`);
@@ -244,6 +253,10 @@ export default function CommandeDetail() {
                 <a className="btn btn-secondary" href={`/api/commandes/${commande.id}/fichiers/zip`}>
                   <Download />Tous les visuels (.zip)
                 </a>
+              )}
+              {!commande.supprime && (
+                <button className="btn btn-secondary" onClick={remettreNonLue}
+                        title="La commande redevient « non lue » dans le tableau de suivi"><Mail />Marquer non lue</button>
               )}
               <button className="btn btn-primary" onClick={() => setEdition(true)}><Pencil />Modifier</button>
               {isAdmin && !commande.supprime && (

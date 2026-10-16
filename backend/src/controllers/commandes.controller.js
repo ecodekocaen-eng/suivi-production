@@ -153,6 +153,14 @@ export async function updateStatut(req, res) {
   res.json({ commande: masquerMarge(commande, req.user.role) });
 }
 
+// Lu / non lu : { lue: true | false }.
+export async function updateLecture(req, res) {
+  const { lue } = req.body || {};
+  if (typeof lue !== 'boolean') return res.status(400).json({ error: 'Indiquez « lue » : true ou false.' });
+  if (!(await service.marquerLecture(req.params.id, lue))) return res.status(404).json({ error: 'Commande introuvable.' });
+  res.json({ ok: true, lue });
+}
+
 export async function remove(req, res) {
   const commande = await service.softDeleteCommande(req.params.id, req.user.id);
   if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });

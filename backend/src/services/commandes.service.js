@@ -117,6 +117,16 @@ export function marquerOuverte(id) {
   });
 }
 
+// Lu / non lu à la main (commun à toute l'équipe) : « non lue » la refait
+// apparaître comme nouvelle dans le tableau. Renvoie false si la commande n'existe pas.
+export async function marquerLecture(id, lue) {
+  const { count } = await prisma.commande.updateMany({
+    where: { id: Number(id) },
+    data: { ouverteAt: lue ? new Date() : null },
+  });
+  return count > 0;
+}
+
 // Statuts pour lesquels la commande a consommé le stock (production démarrée
 // ou au-delà). Le stock se décrémente au passage « En cours de prod ».
 const STATUTS_STOCK = new Set(['En cours de prod', 'Terminé', 'Expédié']);

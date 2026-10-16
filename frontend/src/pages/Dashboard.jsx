@@ -141,6 +141,30 @@ export default function Dashboard() {
     majCharge();
   };
 
+  // Lu / non lu depuis le tableau : affichage immédiat, annulable depuis la notification.
+  const onLectureChange = async (commande, lue) => {
+    const appliquer = (valeur) => setData((d) => ({
+      ...d, items: d.items.map((x) => (x.id === commande.id ? { ...x, ouverteAt: valeur ? new Date().toISOString() : null } : x)),
+    }));
+    appliquer(lue);
+    try {
+      await api.patch(`/commandes/${commande.id}/lecture`, { lue });
+      toast.success(<><strong>{commande.reference}</strong> {lue ? 'marquée comme lue' : 'remise en non lue'}</>, {
+        action: {
+          label: 'Annuler',
+          icon: <Undo2 />,
+          onClick: async () => {
+            appliquer(!lue);
+            try { await api.patch(`/commandes/${commande.id}/lecture`, { lue: !lue }); } catch (err) { toast.error(err.message); load(); }
+          },
+        },
+      });
+    } catch (err) {
+      toast.error(err.message);
+      load();
+    }
+  };
+
   // Active/désactive un statut dans le filtre (multi-sélection).
   const toggleStatut = (s) => setFilters((f) => {
     const statuts = f.statuts.includes(s) ? f.statuts.filter((x) => x !== s) : [...f.statuts, s];
@@ -223,7 +247,7 @@ export default function Dashboard() {
           <span className="toolbar-info">
             {loading && <LoaderCircle className="spin" size={15} />}
             <span><strong>{fmtNumber(data.total)}</strong> commande{data.total > 1 ? 's' : ''}</span>
-            {nouvelles > 0 && <span className="badge badge-brand"><span className="new-dot" />{nouvelles} nouvelle{nouvelles > 1 ? 's' : ''}</span>}
+            {nouvelles > 0 && <span className="badge badge-brand"><span className="new-dot" />{nouvelles} non lue{nouvelles > 1 ? 's' : ''}</span>}
           </span>
           {isAdmin && (
             <button type="button" className={`btn btn-sm btn-secondary${filters.inclureSupprimees ? ' is-on' : ''}`}
@@ -267,6 +291,7 @@ export default function Dashboard() {
             sortDir={prefs.sortDir}
             onSort={onSort}
             onStatutChange={onStatutChange}
+            onLectureChange={onLectureChange}
             compact={prefs.compact}
           />
         )}
