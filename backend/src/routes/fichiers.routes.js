@@ -18,6 +18,9 @@ router.post('/', uploadMw.array('files', 20), asyncHandler(f.upload));
 router.post('/documents', docUpload.array('files', 20), asyncHandler(f.uploadDocuments));
 // Upload ciblant une ligne : /api/commandes/:id/fichiers/ligne/:ligneId
 router.post('/ligne/:ligneId', uploadMw.array('files', 20), asyncHandler(f.uploadLigne));
+// Envoi direct navigateur → Vercel Blob (gros fichiers) : lien signé, puis inscription.
+router.post('/direct', asyncHandler(f.televersementDirect));
+router.post('/direct/enregistrer', asyncHandler(f.enregistrerDirect));
 router.get('/zip', asyncHandler(f.downloadZip));
 router.get('/:fileId/view', asyncHandler(f.view));
 router.get('/:fileId/download', asyncHandler(f.download));

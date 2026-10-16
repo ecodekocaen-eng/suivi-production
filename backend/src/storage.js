@@ -6,14 +6,26 @@
 // ─────────────────────────────────────────────────────────────
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { config } from './config.js';
 
 export const STORAGE_DRIVER = process.env.STORAGE_DRIVER || 'disk';
+
+// Préfixe optionnel de toutes les clés Blob : isole un environnement d'essai
+// (ex. « essais-locaux/ ») du reste du store. Vide en production.
+export const BLOB_PREFIX = STORAGE_DRIVER === 'blob' ? (process.env.BLOB_PREFIX || '') : '';
 
 function sanitize(name) {
   return name
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+// Nom de fichier « sûr » (sans accents ni caractères spéciaux), extension conservée.
+export function nomSur(originalname) {
+  const ext = path.extname(originalname || '').toLowerCase().replace(/[^a-z0-9.]/g, '');
+  const base = sanitize(path.basename(originalname || 'fichier', path.extname(originalname || ''))).slice(0, 80) || 'fichier';
+  return `${base}${ext}`;
 }
 
 // Génère un nom de fichier unique à partir du nom d'origine.
@@ -32,7 +44,7 @@ export function absPath(key) {
 //   - key : identifiant de stockage (chemin relatif disque OU pathname Blob)
 //   - url : URL publique (Blob) ou null (disk → servi via route authentifiée)
 export async function saveBuffer(buffer, { subdir, filename, contentType }) {
-  const key = subdir ? `${subdir}/${filename}` : filename;
+  const key = `${BLOB_PREFIX}${subdir ? `${subdir}/${filename}` : filename}`;
   if (STORAGE_DRIVER === 'blob') {
     const { put } = await import('@vercel/blob');
     // Accès privé : les visuels ne sont pas publics, ils sont servis via l'API authentifiée.
@@ -61,8 +73,12 @@ export async function deletePrefix(subdir) {
   if (STORAGE_DRIVER === 'blob') {
     try {
       const { list, del } = await import('@vercel/blob');
-      const { blobs } = await list({ prefix: `${subdir}/` });
-      if (blobs.length) await del(blobs.map((b) => b.url));
+      let cursor;
+      do {
+        const page = await list({ prefix: `${BLOB_PREFIX}${subdir}/`, cursor });
+        if (page.blobs.length) await del(page.blobs.map((b) => b.url));
+        cursor = page.hasMore ? page.cursor : undefined;
+      } while (cursor);
     } catch (e) { console.error('Blob delPrefix:', e.message); }
     return;
   }
@@ -70,7 +86,7 @@ export async function deletePrefix(subdir) {
   catch (e) { console.error('Disk delPrefix:', e.message); }
 }
 
-// Récupère le contenu d'un fichier en buffer (aperçu, download, zip).
+// Récupère le contenu d'un fichier en buffer (petits fichiers : miniatures produits).
 export async function readBuffer({ key, url }) {
   if (STORAGE_DRIVER === 'blob') {
     const { get } = await import('@vercel/blob');
@@ -80,4 +96,24 @@ export async function readBuffer({ key, url }) {
     return Buffer.from(await new Response(res.stream).arrayBuffer());
   }
   return fs.promises.readFile(absPath(key));
+}
+
+// Ouvre un fichier en flux (aperçu, téléchargement, zip) : rien n'est chargé
+// entièrement en mémoire, quelle que soit la taille du fichier.
+export async function readStream({ key }) {
+  if (STORAGE_DRIVER === 'blob') {
+    const { get } = await import('@vercel/blob');
+    const res = await get(key, { access: 'private' });
+    if (!res || res.statusCode !== 200 || !res.stream) throw new Error('Blob introuvable');
+    return Readable.fromWeb(res.stream);
+  }
+  const abs = absPath(key);
+  await fs.promises.access(abs);
+  return fs.createReadStream(abs);
+}
+
+// Métadonnées réelles d'un blob déjà envoyé (taille, type) — envoi direct.
+export async function infosBlob(pathname) {
+  const { head } = await import('@vercel/blob');
+  return head(pathname);
 }

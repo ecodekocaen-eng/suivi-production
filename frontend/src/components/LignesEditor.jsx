@@ -7,7 +7,8 @@
 import { useRef } from 'react';
 import { Plus, Trash, Paperclip, Link2, X } from 'lucide-react';
 import Thumb, { imageProduit } from './Thumb.jsx';
-import { fmtNumber } from '../format.js';
+import { fmtNumber, fmtSize } from '../format.js';
+import { useTailleMax, libelleTailleMax } from '../televersement.js';
 
 export const ligneVide = () => ({ typeMug: '', visuel: '', quantite: '', commentaire: '', lien: '', files: [] });
 
@@ -25,6 +26,7 @@ const ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,application/pdf';
 
 export default function LignesEditor({ lignes, onChange, produits = [], allowFiles = false }) {
   const fileRefs = useRef({});
+  const tailleMax = useTailleMax();
   const actifs = produits.filter((p) => p.actif);
   const byNom = Object.fromEntries(produits.map((p) => [p.nom, p]));
 
@@ -100,7 +102,12 @@ export default function LignesEditor({ lignes, onChange, produits = [], allowFil
                     <button type="button" onClick={() => retirerFichier(i, f)} aria-label={`Retirer ${f.name}`}><X /></button>
                   </span>
                 ))}
-                {!(l.files || []).length && <span className="field-hint">JPG, PNG, GIF, WEBP ou PDF</span>}
+                {!(l.files || []).length && (
+                  <span className="field-hint">JPG, PNG, GIF, WEBP ou PDF{tailleMax ? ` · ${libelleTailleMax(tailleMax)}` : ''}</span>
+                )}
+                {(l.files || []).some((f) => tailleMax && f.size > tailleMax) && (
+                  <span className="field-hint text-danger">Un fichier dépasse la limite de {fmtSize(tailleMax)} : retirez-le ou passez par un lien WeTransfer/Smash.</span>
+                )}
               </div>
             )}
           </div>

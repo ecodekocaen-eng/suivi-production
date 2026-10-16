@@ -15,6 +15,7 @@ import { addJoursOuvres, aujourdhuiISO, fmtNumber } from '../format.js';
 import Modal from '../ui/Modal.jsx';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import LignesEditor, { ligneVide, totauxLignes } from './LignesEditor.jsx';
+import { envoyerFichiers, verifierTailles } from '../televersement.js';
 
 // Convertit une date ISO en valeur pour <input type="date"> (yyyy-mm-dd).
 const toDateInput = (iso) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
@@ -134,6 +135,9 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
       visuel: l.visuel || l.files[0]?.name || '',
     }));
 
+    // Fichier trop gros : on le signale AVANT de créer la commande.
+    await verifierTailles(utiles.flatMap((l) => l.files));
+
     const { commande: creee } = await api.post('/commandes', { ...form, lignes: payloadLignes });
 
     // Upload des visuels sur leur ligne respective (créées dans le même ordre).
@@ -146,11 +150,12 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
         if (utiles[i].files.length && creees[i]) {
           n += 1;
           const ligne = n;
-          await api.uploadWithProgress(
-            `/commandes/${creee.id}/fichiers/ligne/${creees[i].id}`,
-            utiles[i].files,
-            (percent) => setProgress({ ligne, total, percent }),
-          );
+          await envoyerFichiers({
+            commandeId: creee.id,
+            ligneId: creees[i].id,
+            files: utiles[i].files,
+            onProgress: (percent) => setProgress({ ligne, total, percent }),
+          });
         }
       }
     } catch (err) {

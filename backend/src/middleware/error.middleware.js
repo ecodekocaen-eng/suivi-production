@@ -14,7 +14,7 @@ export function errorHandler(err, req, res, next) {
 
   // Erreurs multer (taille, type de fichier…)
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ error: 'Fichier trop volumineux.' });
+    return res.status(400).json({ error: `Fichier trop volumineux (${Math.round(config.maxFileSize / 1048576)} Mo maximum).` });
   }
   const status = err.status || 500;
   res.status(status).json({

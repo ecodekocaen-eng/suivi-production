@@ -7,7 +7,15 @@ import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { addLog } from './log.service.js';
 import { LOG_ACTIONS, STATUT_EXPEDIEE } from '../constants.js';
-import { saveBuffer, deleteByKey, deletePrefix, makeFilename } from '../storage.js';
+import { saveBuffer, deleteByKey, deletePrefix, makeFilename, BLOB_PREFIX } from '../storage.js';
+
+// Dossier de stockage d'un fichier. Les DOCUMENTS (bon de commande, rendu 3D…)
+// vivent sous un préfixe séparé (documents/…) pour échapper à la purge des
+// visuels à l'expédition.
+export function dossierFichiers(commandeId, ligneId = null, categorie = 'VISUEL') {
+  if (categorie === 'DOCUMENT') return `documents/commande_${commandeId}`;
+  return ligneId ? `commande_${commandeId}/ligne_${ligneId}` : `commande_${commandeId}`;
+}
 
 // Enregistre un fichier (buffer multer) : stockage + métadonnées + log.
 // ligneId : rattache le visuel à une ligne précise (optionnel).
@@ -15,9 +23,7 @@ import { saveBuffer, deleteByKey, deletePrefix, makeFilename } from '../storage.
 // séparé (documents/…) pour échapper à la purge des visuels à l'expédition.
 export async function recordFichier(commandeId, file, userId, ligneId = null, categorie = 'VISUEL') {
   const filename = makeFilename(file.originalname);
-  const subdir = categorie === 'DOCUMENT'
-    ? `documents/commande_${commandeId}`
-    : (ligneId ? `commande_${commandeId}/ligne_${ligneId}` : `commande_${commandeId}`);
+  const subdir = dossierFichiers(commandeId, ligneId, categorie);
   const { key, url } = await saveBuffer(file.buffer, {
     subdir, filename, contentType: file.mimetype,
   });
@@ -38,6 +44,36 @@ export async function recordFichier(commandeId, file, userId, ligneId = null, ca
   await addLog({
     action: LOG_ACTIONS.FICHIER_AJOUTE,
     detail: `Ajout du ${categorie === 'DOCUMENT' ? 'document' : 'visuel'} « ${file.originalname} »`,
+    userId,
+    commandeId,
+  });
+  return fichier;
+}
+
+// Enregistre un fichier déjà déposé dans le stockage par le navigateur (envoi
+// direct vers Vercel Blob) : la taille et le type viennent du stockage lui-même,
+// pas de ce que déclare le navigateur.
+export async function recordFichierDirect(commandeId, { pathname, url, nom, taille, type }, userId, ligneId = null, categorie = 'VISUEL') {
+  const deja = await prisma.fichier.findFirst({ where: { chemin: pathname, commandeId } });
+  if (deja) return deja; // second appel pour le même envoi : rien à refaire
+
+  const dossier = `${BLOB_PREFIX}${dossierFichiers(commandeId, ligneId, categorie)}/`;
+  const fichier = await prisma.fichier.create({
+    data: {
+      nom,
+      nomStockage: pathname.slice(dossier.length),
+      chemin: pathname,
+      url,
+      taille,
+      type,
+      categorie,
+      commandeId,
+      ligneId,
+    },
+  });
+  await addLog({
+    action: LOG_ACTIONS.FICHIER_AJOUTE,
+    detail: `Ajout du ${categorie === 'DOCUMENT' ? 'document' : 'visuel'} « ${nom} »`,
     userId,
     commandeId,
   });

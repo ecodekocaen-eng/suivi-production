@@ -9,6 +9,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 
 import { config } from './config.js';
+import { STORAGE_DRIVER, BLOB_PREFIX } from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { STATUTS, STATUT_LABELS, ROLES } from './constants.js';
@@ -40,9 +41,17 @@ export function createApp() {
   // Vérification de l'état de l'API.
   app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-  // Métadonnées (statuts, libellés, rôles) pour le frontend.
+  // Métadonnées (statuts, libellés, rôles, envoi de fichiers) pour le frontend.
   app.get('/api/meta', requireAuth, (req, res) => {
-    res.json({ statuts: STATUTS, statutLabels: STATUT_LABELS, roles: ROLES });
+    const direct = STORAGE_DRIVER === 'blob';
+    res.json({
+      statuts: STATUTS, statutLabels: STATUT_LABELS, roles: ROLES,
+      envoi: {
+        mode: direct ? 'direct' : 'api',
+        tailleMax: direct ? config.maxDirectUploadSize : config.maxFileSize,
+        prefixe: BLOB_PREFIX,
+      },
+    });
   });
 
   app.use('/api/auth', authRoutes);

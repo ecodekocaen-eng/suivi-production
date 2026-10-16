@@ -26,7 +26,11 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5173',
 
   uploadDir: resolveFromRoot(process.env.UPLOAD_DIR || './uploads'),
-  maxFileSize: parseInt(process.env.MAX_FILE_SIZE || String(10 * 1024 * 1024), 10),
+  // Envoi classique via l'API (stockage disque). Sur Vercel, l'API ne peut pas
+  // recevoir plus de 4,5 Mo par requête : les fichiers y partent en envoi direct.
+  maxFileSize: parseInt(process.env.MAX_FILE_SIZE || String(100 * 1024 * 1024), 10),
+  // Envoi direct navigateur → Vercel Blob (lien signé) : plafond par fichier.
+  maxDirectUploadSize: parseInt(process.env.MAX_DIRECT_UPLOAD_SIZE || String(100 * 1024 * 1024), 10),
 
   // Rétention des visuels après expédition (jours) avant suppression auto.
   retentionDays: parseInt(process.env.RETENTION_DAYS || '60', 10),

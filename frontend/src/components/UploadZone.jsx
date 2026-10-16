@@ -2,10 +2,11 @@
 //  Zone d'upload : glisser-déposer + sélection par clic (ou clavier).
 //  categorie "document" : bons de commande, rendus 3D… (types élargis,
 //  conservés après expédition) — sinon visuels de production.
+//  Les gros fichiers partent directement dans le stockage (voir televersement.js).
 // ─────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react';
 import { Upload, FilePlus, LoaderCircle } from 'lucide-react';
-import { api } from '../api.js';
+import { envoyerFichiers, useTailleMax, libelleTailleMax } from '../televersement.js';
 import { useToast } from '../ui/feedback.jsx';
 
 const ACCEPT_VISUELS = 'image/jpeg,image/png,image/gif,image/webp,application/pdf';
@@ -18,13 +19,7 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const isDoc = categorie === 'document';
-
-  // Endpoint : documents, ligne précise, ou visuels au niveau commande.
-  const endpoint = isDoc
-    ? `/commandes/${commandeId}/fichiers/documents`
-    : (ligneId
-        ? `/commandes/${commandeId}/fichiers/ligne/${ligneId}`
-        : `/commandes/${commandeId}/fichiers`);
+  const tailleMax = useTailleMax();
 
   const envoyer = async (files) => {
     if (!files || files.length === 0 || busy) return;
@@ -32,7 +27,7 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
     setBusy(true);
     setProgress(0);
     try {
-      await api.uploadWithProgress(endpoint, files, setProgress);
+      await envoyerFichiers({ commandeId, ligneId, categorie, files, onProgress: setProgress });
       toast.success(isDoc
         ? `${n} document${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''}`
         : `${n} visuel${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''}`);
@@ -53,11 +48,10 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
   };
 
   const titre = isDoc ? 'Ajouter des documents' : (compact ? 'Ajouter des visuels à cette ligne' : 'Ajouter des visuels');
+  const max = libelleTailleMax(tailleMax);
   const aide = isDoc
-    ? 'Glissez-déposez ou cliquez · PDF, images, Word, Excel, CSV'
-    : (compact
-        ? 'Glissez-déposez ou cliquez · JPG, PNG, GIF, WEBP, PDF'
-        : 'Glissez-déposez ou cliquez · JPG, PNG, GIF, WEBP, PDF — gros fichiers : lien WeTransfer/Smash');
+    ? `Glissez-déposez ou cliquez · PDF, images, Word, Excel, CSV${max ? ` · ${max}` : ''}`
+    : `Glissez-déposez ou cliquez · JPG, PNG, GIF, WEBP, PDF${max ? ` · ${max}` : ''}`;
 
   return (
     <div>
