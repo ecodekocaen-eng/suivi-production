@@ -811,6 +811,10 @@ body.has-modal { overflow: hidden; }
 .demande-table .col-apercu > .modele-sans-apercu { display: grid; place-items: center; height: auto; }
 .demande-table .col-apercu img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .demande-table tr.is-missing td { background: var(--warning-bg); }
+.demande-table tr.is-missing.is-drop td { background: var(--brand-50); }
+.demande-table tr.is-missing.is-drop .modele-sans-apercu { color: var(--brand); border: 1.5px dashed var(--brand); background: #fff; }
+.ligne-ajout { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .5rem; margin-top: 2px; }
+.ligne-ajout .cell-sub { margin-top: 0; }
 .demande-table tr.is-missing .modele-sans-apercu { color: var(--warning); border-color: var(--warning-bd); background: #fff; }
 .demande-table select { min-width: 150px; }
 .demande-table .cell-sub svg { vertical-align: -2px; }

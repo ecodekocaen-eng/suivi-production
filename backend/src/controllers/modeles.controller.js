@@ -221,10 +221,11 @@ export async function creerCommande(req, res) {
       console.error(`Copie du fichier du modèle ${m.reference} :`, e.message);
     }
   }
-  const numero = cleanStr(req.body.numero);
+  // Document d'origine tel qu'écrit dans le PDF (« Demande de prix AK260232 », « Bon de commande … »).
+  const document = [cleanStr(req.body.type), cleanStr(req.body.numero)].filter(Boolean).join(' ');
   await addLog({
     action: LOG_ACTIONS.FICHIER_AJOUTE,
-    detail: `Créée depuis ${numero ? `la demande de prix ${numero}` : 'une demande de prix'} : ${copies} fichier${copies > 1 ? 's' : ''} d’impression repris de la base de données`,
+    detail: `Créée depuis ${document ? `« ${document} »` : 'une demande client'} : ${copies} fichier${copies > 1 ? 's' : ''} d’impression repris de la base de données`,
     userId: req.user.id,
     commandeId: commande.id,
   });

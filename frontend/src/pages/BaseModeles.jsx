@@ -28,6 +28,38 @@ const urlApercu = (m) => `/api/modeles/${m.id}/apercu?v=${version(m)}`;
 const urlFichier = (m) => `/api/modeles/${m.id}/fichier?v=${version(m)}`;
 // Tri naturel : 104HE-2 avant 104HE-10.
 const parReference = (a, b) => a.reference.localeCompare(b.reference, 'fr', { numeric: true });
+const estFichierModele = (f) => ACCEPT_MODELES.split(',').includes(f?.type);
+
+// Ajoute (ou remplace) un modèle dans la base : fichier d'impression, vignette
+// générée dans le navigateur, puis inscription. Renvoie le modèle enregistré.
+async function enregistrerModele({ reference, nom, client, typeMug, fichier }) {
+  const chemin = await deposerFichierModele(reference, fichier);
+  let apercu = null;
+  try {
+    const { vignette } = await import('../pdf.js');
+    apercu = { pathname: await deposerFichierModele(reference, new File([await vignette(fichier)], 'apercu.jpg', { type: 'image/jpeg' })) };
+  } catch (err) {
+    console.warn('Vignette impossible :', fichier.name, err);
+  }
+  const { modele } = await api.post('/modeles', {
+    reference, nom, client, typeMug, fichier: { pathname: chemin, nom: fichier.name.normalize('NFC') }, apercu,
+  });
+  return modele;
+}
+
+// Petit bouton « Ajouter le fichier » (sélecteur de fichier caché).
+function BoutonFichier({ onFichier, busy, libelle = 'Ajouter le fichier' }) {
+  const inputRef = useRef(null);
+  return (
+    <>
+      <input ref={inputRef} type="file" accept={ACCEPT_MODELES} hidden
+             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onFichier(f); }} />
+      <button type="button" className="btn btn-secondary btn-xs" disabled={busy} onClick={() => inputRef.current?.click()}>
+        {busy ? <LoaderCircle className="spin" /> : <Upload />}{busy ? 'Ajout…' : libelle}
+      </button>
+    </>
+  );
+}
 
 // Zone de dépôt (cliquer ou glisser-déposer).
 function ZoneDepot({ accept, multiple = false, onFichiers, busy = false, titre, aide, icone }) {
@@ -60,9 +92,9 @@ function Apercu({ modele, className = '' }) {
   return <img className={className} src={urlApercu(modele)} alt="" loading="lazy" onError={() => setErreur(true)} />;
 }
 
-// ── Demande de prix → commande ───────────────────────────────
+// ── Demande client (PDF) → commande ──────────────────────────
 
-function AnalyseDemande({ modeles, produits }) {
+function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [pdf, setPdf] = useState(null);
@@ -71,6 +103,9 @@ function AnalyseDemande({ modeles, produits }) {
   const [form, setForm] = useState({ client: '', nom: '', dateSortie: '' });
   const [lignes, setLignes] = useState([]);
   const [busy, setBusy] = useState(false);
+  // Visuels manquants ajoutés depuis la demande : { [cle de ligne]: 'en-cours' | 'ok' }.
+  const [ajouts, setAjouts] = useState({});
+  const [survol, setSurvol] = useState(null);
 
   const parRef = useMemo(() => new Map(modeles.map((m) => [m.reference, m])), [modeles]);
   const clientsConnus = useMemo(
@@ -81,7 +116,7 @@ function AnalyseDemande({ modeles, produits }) {
   const lire = async ([fichier]) => {
     if (!fichier) return;
     if (fichier.type !== 'application/pdf' && !/\.pdf$/i.test(fichier.name)) {
-      toast.error('Déposez la demande de prix au format PDF.');
+      toast.error('Déposez la demande au format PDF.');
       return;
     }
     setLecture(true);
@@ -98,9 +133,10 @@ function AnalyseDemande({ modeles, produits }) {
         || resultat.societe || '';
       setPdf(fichier);
       setAnalyse(resultat);
+      setAjouts({});
       setForm({
         client,
-        nom: resultat.numero ? `Demande de prix ${resultat.numero}` : fichier.name.replace(/\.pdf$/i, ''),
+        nom: resultat.numero ? `${resultat.type} ${resultat.numero}` : fichier.name.replace(/\.pdf$/i, ''),
         dateSortie: resultat.dateExpedition || '',
       });
       setLignes(resultat.lignes.map((l, i) => ({
@@ -115,9 +151,48 @@ function AnalyseDemande({ modeles, produits }) {
     }
   };
 
-  const recommencer = () => { setPdf(null); setAnalyse(null); setLignes([]); };
+  const recommencer = () => { setPdf(null); setAnalyse(null); setLignes([]); setAjouts({}); };
   const majLigne = (cle, champ, valeur) => setLignes((ls) => ls.map((l) => (l.cle === cle ? { ...l, [champ]: valeur } : l)));
   const retirerLigne = (cle) => setLignes((ls) => ls.filter((l) => l.cle !== cle));
+
+  // Visuel absent : on dépose son fichier d'impression ici, il entre dans la base
+  // de données (référence et désignation de la demande) et la ligne le reprend.
+  const ajouterFichier = async (ligne, fichier) => {
+    if (!estFichierModele(fichier)) {
+      toast.error('Fichier d’impression attendu : PDF ou image (JPG, PNG, WEBP, GIF).');
+      return;
+    }
+    setAjouts((a) => ({ ...a, [ligne.cle]: 'en-cours' }));
+    try {
+      const modele = await enregistrerModele({
+        reference: ligne.reference,
+        nom: ligne.designation || ligne.reference,
+        client: form.client,
+        typeMug: ligne.typeMug,
+        fichier,
+      });
+      onModeleAjoute(modele);
+      setAjouts((a) => ({ ...a, [ligne.cle]: 'ok' }));
+      toast.success(<><strong>{ligne.reference}</strong> ajouté à la base de données</>);
+    } catch (err) {
+      setAjouts((a) => { const { [ligne.cle]: _, ...reste } = a; return reste; });
+      toast.error(`${ligne.reference} : ${err.message}`);
+    }
+  };
+  const glisser = (ligne, actif) => (e) => {
+    if (!isAdmin || parRef.get(ligne.reference)?.fichierChemin) return;
+    // Passage d'une cellule à l'autre de la même ligne : on reste « au-dessus ».
+    if (!actif && e.currentTarget.contains(e.relatedTarget)) return;
+    e.preventDefault();
+    setSurvol(actif ? ligne.cle : null);
+  };
+  const deposerSurLigne = (ligne) => (e) => {
+    if (!isAdmin || parRef.get(ligne.reference)?.fichierChemin) return;
+    e.preventDefault();
+    setSurvol(null);
+    const fichier = e.dataTransfer.files?.[0];
+    if (fichier && ajouts[ligne.cle] !== 'en-cours') ajouterFichier(ligne, fichier);
+  };
 
   const trouvees = lignes.filter((l) => parRef.get(l.reference)?.fichierChemin);
   const absentes = lignes.filter((l) => !parRef.get(l.reference)?.fichierChemin);
@@ -131,14 +206,15 @@ function AnalyseDemande({ modeles, produits }) {
         client: form.client,
         nom: form.nom,
         numero: analyse.numero,
+        type: analyse.numero ? analyse.type : null,
         dateSortieTexte: form.dateSortie,
         lignes: lignes.map(({ reference, designation, quantite, typeMug }) => ({ reference, designation, quantite, typeMug })),
       });
-      // La demande de prix du client rejoint les documents de la commande.
+      // La demande du client (PDF) rejoint les documents de la commande.
       try {
         await envoyerFichiers({ commandeId: commande.id, categorie: 'document', files: [pdf] });
       } catch (err) {
-        toast.error(`Commande créée, mais la demande de prix n’a pas pu être jointe : ${err.message}`);
+        toast.error(`Commande créée, mais la demande n’a pas pu être jointe : ${err.message}`);
       }
       toast.success(<>Commande <strong>{commande.reference}</strong> créée · {plural(fichiers, 'fichier')} d’impression associé{fichiers > 1 ? 's' : ''}</>);
       navigate(`/commandes/${commande.id}`);
@@ -152,7 +228,7 @@ function AnalyseDemande({ modeles, produits }) {
     return (
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title"><FileSearch />Demande de prix</h2>
+          <h2 className="card-title"><FileSearch />Demande client</h2>
           <span className="card-subtitle">La commande est préparée avec le bon fichier d’impression sur chaque ligne</span>
         </div>
         <div className="card-body">
@@ -161,7 +237,7 @@ function AnalyseDemande({ modeles, produits }) {
             onFichiers={lire}
             busy={lecture}
             icone={<FileSearch />}
-            titre={lecture ? 'Lecture de la demande de prix…' : 'Déposez la demande de prix (PDF)'}
+            titre={lecture ? 'Lecture de la demande…' : 'Déposez la demande (PDF)'}
             aide="Les références et les quantités sont lues automatiquement, puis retrouvées dans la base de données."
           />
         </div>
@@ -172,7 +248,7 @@ function AnalyseDemande({ modeles, produits }) {
   return (
     <div className="card">
       <div className="card-header">
-        <h2 className="card-title"><FileSearch />{analyse.numero ? `Demande de prix ${analyse.numero}` : pdf.name}</h2>
+        <h2 className="card-title"><FileSearch />{analyse.numero ? `${analyse.type} ${analyse.numero}` : pdf.name}</h2>
         <button type="button" className="btn btn-ghost btn-sm" onClick={recommencer} disabled={busy}><RotateCcw />Autre PDF</button>
       </div>
       <div className="card-body stack">
@@ -218,19 +294,34 @@ function AnalyseDemande({ modeles, produits }) {
               {lignes.map((l) => {
                 const m = parRef.get(l.reference);
                 const ok = Boolean(m?.fichierChemin);
+                const enCours = ajouts[l.cle] === 'en-cours';
                 return (
-                  <tr key={l.cle} className={ok ? '' : 'is-missing'}>
+                  <tr key={l.cle} className={`${ok ? '' : 'is-missing'}${survol === l.cle ? ' is-drop' : ''}`}
+                      onDragOver={glisser(l, true)} onDragLeave={glisser(l, false)} onDrop={deposerSurLigne(l)}>
                     <td className="col-apercu">
                       {ok
                         ? <a href={urlFichier(m)} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier d’impression"><Apercu modele={m} /></a>
-                        : <span className="modele-sans-apercu"><TriangleAlert /></span>}
+                        : <span className="modele-sans-apercu">{enCours ? <LoaderCircle className="spin" /> : (survol === l.cle ? <Upload /> : <TriangleAlert />)}</span>}
                     </td>
                     <td className="nowrap"><span className="ref">{l.reference}</span></td>
                     <td>
                       <span className="cell-main">{ok ? m.nom : (l.designation || '—')}</span>
-                      {ok
-                        ? <span className="cell-sub"><Check size={13} className="text-success" /> {m.fichierNom}</span>
-                        : <span className="cell-sub text-warning">Absent de la base : la ligne sera créée sans fichier, à ajouter ensuite</span>}
+                      {ok && (
+                        <span className="cell-sub">
+                          <Check size={13} className="text-success" /> {ajouts[l.cle] === 'ok' ? 'Ajouté à la base · ' : ''}{m.fichierNom}
+                        </span>
+                      )}
+                      {!ok && !isAdmin && (
+                        <span className="cell-sub text-warning">Absent de la base : la ligne sera créée sans fichier, à ajouter ensuite</span>
+                      )}
+                      {!ok && isAdmin && (
+                        <span className="ligne-ajout">
+                          <span className="cell-sub text-warning">
+                            {survol === l.cle ? 'Lâchez le fichier pour l’ajouter à la base' : 'Absent de la base : glissez son fichier ici, ou'}
+                          </span>
+                          <BoutonFichier busy={enCours} onFichier={(f) => ajouterFichier(l, f)} />
+                        </span>
+                      )}
                     </td>
                     <td>
                       <select value={l.typeMug} onChange={(e) => majLigne(l.cle, 'typeMug', e.target.value)} aria-label={`Type de mug pour ${l.reference}`}>
@@ -254,7 +345,7 @@ function AnalyseDemande({ modeles, produits }) {
         </div>
 
         <div className="demande-actions">
-          <span className="muted">Les fichiers d’impression sont copiés sur chaque ligne, et la demande de prix est jointe aux documents.</span>
+          <span className="muted">Les fichiers d’impression sont copiés sur chaque ligne, et la demande est jointe aux documents.</span>
           <button type="button" className="btn btn-primary" onClick={creer} disabled={busy || lignes.length === 0}>
             {busy ? <LoaderCircle className="spin" /> : <PackagePlus />}Créer la commande<ArrowRight />
           </button>
@@ -309,19 +400,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
     for (const f of aImporter) {
       maj(f.id, { etat: 'en-cours', message: '' });
       try {
-        const reference = normRef(f.reference);
-        const chemin = await deposerFichierModele(reference, f.file);
-        let apercu = null;
-        try {
-          const { vignette } = await import('../pdf.js');
-          const image = await vignette(f.file);
-          apercu = { pathname: await deposerFichierModele(reference, new File([image], 'apercu.jpg', { type: 'image/jpeg' })) };
-        } catch (err) {
-          console.warn('Vignette impossible :', f.file.name, err);
-        }
-        await api.post('/modeles', {
-          reference, nom: f.nom, client, typeMug, fichier: { pathname: chemin, nom: f.file.name.normalize('NFC') }, apercu,
-        });
+        await enregistrerModele({ reference: normRef(f.reference), nom: f.nom, client, typeMug, fichier: f.file });
         maj(f.id, { etat: 'ok' });
       } catch (err) {
         erreurs += 1;
@@ -415,13 +494,7 @@ function EditModal({ modele, produits, onClose, onSaved }) {
     setBusy(true);
     try {
       if (nouveauFichier) {
-        const chemin = await deposerFichierModele(modele.reference, nouveauFichier);
-        let apercu = null;
-        try {
-          const { vignette } = await import('../pdf.js');
-          apercu = { pathname: await deposerFichierModele(modele.reference, new File([await vignette(nouveauFichier)], 'apercu.jpg', { type: 'image/jpeg' })) };
-        } catch (err) { console.warn('Vignette impossible :', err); }
-        await api.post('/modeles', { reference: modele.reference, ...form, fichier: { pathname: chemin, nom: nouveauFichier.name }, apercu });
+        await enregistrerModele({ reference: modele.reference, ...form, fichier: nouveauFichier });
       } else {
         await api.patch(`/modeles/${modele.id}`, form);
       }
@@ -526,13 +599,20 @@ export default function BaseModeles() {
     <>
       <PageHeader
         title="Base de données"
-        subtitle="Les modèles de vos clients et leurs fichiers d’impression. Déposez une demande de prix : la commande est prête, avec les bons fichiers."
+        subtitle="Les modèles de vos clients et leurs fichiers d’impression. Déposez une demande client : la commande est prête, avec les bons fichiers."
         actions={isAdmin && (
           <button className="btn btn-secondary" onClick={() => setImporter(true)}><Upload />Importer des modèles</button>
         )}
       />
 
-      {modeles && <AnalyseDemande modeles={modeles} produits={produits} />}
+      {modeles && (
+        <AnalyseDemande
+          modeles={modeles}
+          produits={produits}
+          isAdmin={isAdmin}
+          onModeleAjoute={(m) => setModeles((ms) => [...(ms || []).filter((x) => x.reference !== m.reference), m].sort(parReference))}
+        />
+      )}
 
       <div className="card">
         <div className="toolbar">

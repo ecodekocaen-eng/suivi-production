@@ -21,7 +21,10 @@ const nombre = (s) => Math.round(parseFloat(String(s).replace(/[\s  ]/g, '').
  */
 export function analyserDemande(lignesTexte) {
   const texte = lignesTexte.join('\n');
-  const numero = texte.match(/(?:Demande de prix|Bon de commande|Commande(?: fournisseur)?)\s*(?:n[°o]\.?\s*)?:?\s*([A-Z]{1,5}[0-9][A-Z0-9/_-]{2,})/i)?.[1] || null;
+  const entete = texte.match(/(Demande de prix|Bon de commande|Commande(?: fournisseur)?)\s*(?:n[°o]\.?\s*)?:?\s*([A-Z]{1,5}[0-9][A-Z0-9/_-]{2,})/i);
+  const numero = entete?.[2] || null;
+  // Type du document tel qu'écrit dans le PDF (« Demande de prix », « Bon de commande »…).
+  const type = entete ? entete[1].charAt(0).toUpperCase() + entete[1].slice(1).toLowerCase() : 'Demande';
   const dateExpedition = texte.match(/Date d['’]exp[ée]dition(?: demand[ée]e)?\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)?.[1] || null;
   // Société émettrice : pied de page Odoo « SAS NOM - CAPITAL… », sinon 1re ligne du document.
   const societe = (texte.match(/\b(?:SAS|SARL|SA|EURL|SASU)\s+(.+?)\s+-\s+CAPITAL/i)?.[1] || lignesTexte[0] || '').trim() || null;
@@ -42,7 +45,7 @@ export function analyserDemande(lignesTexte) {
     lignes.push({ reference: normRef(m[1]), designation, quantite: q ? nombre(q[1]) : 0, date });
   });
 
-  return { numero, dateExpedition: dateExpedition || lignes.find((l) => l.date)?.date || null, societe, lignes };
+  return { type, numero, dateExpedition: dateExpedition || lignes.find((l) => l.date)?.date || null, societe, lignes };
 }
 
 // Référence et nom d'un modèle d'après le nom de son fichier. Sans référence
