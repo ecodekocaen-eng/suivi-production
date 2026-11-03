@@ -7,6 +7,20 @@
       "runtimeArgs": ["run", "start:preview", "--prefix", "backend"],
       "port": 4100,
       "autoPort": false
+    },
+    {
+      "name": "api-dev-windows",
+      "runtimeExecutable": "powershell.exe",
+      "runtimeArgs": ["-NoProfile", "-Command", "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User'); npm.cmd run dev --prefix backend"],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
+      "name": "front-dev-windows",
+      "runtimeExecutable": "powershell.exe",
+      "runtimeArgs": ["-NoProfile", "-Command", "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User'); npm.cmd run dev --prefix frontend"],
+      "port": 5173,
+      "autoPort": false
     }
   ]
 }
