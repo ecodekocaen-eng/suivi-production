@@ -55,6 +55,44 @@ export async function ensureSchema() {
       CONSTRAINT "Modele_pkey" PRIMARY KEY ("id")
     )`);
     await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Modele_reference_key" ON "Modele"("reference")');
+
+    // File d'impression des transferts + signe de vie de l'agent (PC atelier).
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Impression" (
+      "id" SERIAL NOT NULL,
+      "commandeId" INTEGER NOT NULL,
+      "ligneId" INTEGER,
+      "fichierId" INTEGER,
+      "fichierNom" TEXT NOT NULL,
+      "quantite" INTEGER NOT NULL,
+      "imprimante" TEXT NOT NULL,
+      "statut" TEXT NOT NULL DEFAULT 'EN_FILE',
+      "message" TEXT,
+      "lot" TEXT NOT NULL,
+      "creeParId" INTEGER,
+      "creeParNom" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "envoyeAt" TIMESTAMP(3),
+      "imprimeAt" TIMESTAMP(3),
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "Impression_pkey" PRIMARY KEY ("id")
+    )`);
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "PosteImpression" (
+      "id" SERIAL NOT NULL,
+      "nom" TEXT NOT NULL,
+      "version" TEXT,
+      "imprimantes" TEXT,
+      "derniereVue" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "PosteImpression_pkey" PRIMARY KEY ("id")
+    )`);
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "Impression_commandeId_idx" ON "Impression"("commandeId")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "Impression_statut_idx" ON "Impression"("statut")');
+    await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "PosteImpression_nom_key" ON "PosteImpression"("nom")');
+    // PostgreSQL n'a pas de « ADD CONSTRAINT IF NOT EXISTS » : on vérifie d'abord.
+    await prisma.$executeRawUnsafe(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Impression_commandeId_fkey') THEN
+        ALTER TABLE "Impression" ADD CONSTRAINT "Impression_commandeId_fkey" FOREIGN KEY ("commandeId") REFERENCES "Commande"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+    END $$`);
     schemaOk = true;
   } catch (err) {
     console.error('Création des tables manquantes :', err.message);

@@ -4,6 +4,7 @@
 import * as service from '../services/commandes.service.js';
 import { getLogsForCommande } from '../services/log.service.js';
 import { getReglagesForVisuels } from '../services/reglages.service.js';
+import { impressionsDeCommande } from '../services/impressions.service.js';
 import { STATUTS } from '../constants.js';
 import { parseFrDate, parseIntSafe, parsePrice, cleanStr } from '../utils/parse.js';
 
@@ -106,7 +107,9 @@ export async function show(req, res) {
     ? commande.lignes.map((l) => l.visuel)
     : [commande.designation];
   const reglages = await getReglagesForVisuels(visuels);
-  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages });
+  // Envois à l'impression (état par ligne sur la fiche).
+  const impressions = await impressionsDeCommande(commande.id);
+  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions });
 }
 
 // Prochaine référence disponible (pour préremplir le formulaire).

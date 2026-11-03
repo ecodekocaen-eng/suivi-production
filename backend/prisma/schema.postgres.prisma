@@ -76,9 +76,10 @@ model Commande {
   modifiePar   User? @relation("ModifiePar", fields: [modifieParId], references: [id])
   modifieParId Int?
 
-  fichiers Fichier[]
-  logs     Log[]
-  lignes   LigneCommande[]
+  fichiers    Fichier[]
+  logs        Log[]
+  lignes      LigneCommande[]
+  impressions Impression[]
 
   @@index([statut])
   @@index([client])
@@ -201,4 +202,43 @@ model Modele {
   apercuChemin  String? // vignette PNG générée à l'import
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// File d'impression des transferts : un visuel à imprimer en N exemplaires sur
+// l'imprimante A ou B. L'agent d'impression du PC atelier le dépose dans
+// Edge Print, puis signale la fin d'impression (la commande passe alors seule
+// en « Impression OK » quand toutes ses lignes sont imprimées).
+// ⚠️ En production, la table est créée au démarrage (bootstrap.js › ensureSchema) :
+// garder le SQL de création identique à ce modèle.
+model Impression {
+  id         Int       @id @default(autoincrement())
+  commande   Commande  @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  commandeId Int
+  ligneId    Int? // ligne d'origine (null : visuel au niveau de la commande)
+  fichierId  Int? // visuel à imprimer (il peut avoir été supprimé depuis)
+  fichierNom String // nom du visuel au moment de l'envoi
+  quantite   Int // nombre de transferts
+  imprimante String // A | B (voir IMPRIMANTES dans constants.js)
+  statut     String    @default("EN_FILE") // EN_FILE | ENVOYE | IMPRIME | ERREUR | ANNULE
+  message    String? // dernier message de l'agent (erreur, travail Edge Print…)
+  lot        String // un clic « Envoyer » = un lot
+  creeParId  Int?
+  creeParNom String?
+  createdAt  DateTime  @default(now())
+  envoyeAt   DateTime?
+  imprimeAt  DateTime?
+  updatedAt  DateTime  @updatedAt
+
+  @@index([commandeId])
+  @@index([statut])
+}
+
+// Agent d'impression (PC atelier) : dernier signe de vie et imprimantes déclarées.
+// ⚠️ Table créée au démarrage en production (bootstrap.js › ensureSchema).
+model PosteImpression {
+  id          Int      @id @default(autoincrement())
+  nom         String   @unique // ex. PC atelier
+  version     String?
+  imprimantes String? // JSON : [{ code, libelle }]
+  derniereVue DateTime @default(now())
 }

@@ -27,6 +27,8 @@ import reglagesRoutes from './routes/reglages.routes.js';
 import facturationRoutes from './routes/facturation.routes.js';
 import cronRoutes from './routes/cron.routes.js';
 import modelesRoutes from './routes/modeles.routes.js';
+import impressionsRoutes from './routes/impressions.routes.js';
+import agentRoutes from './routes/agent.routes.js';
 
 export function createApp() {
   const app = express();
@@ -67,6 +69,9 @@ export function createApp() {
   app.use('/api/commandes/:id/fichiers', fichiersRoutes);
   app.use('/api/commandes', commandesRoutes);
   app.use('/api/modeles', modelesRoutes);
+  app.use('/api/impressions', impressionsRoutes);
+  // Agent d'impression du PC atelier : jeton dédié, pas de session.
+  app.use('/api/agent', agentRoutes);
 
   // En production, sert le frontend React compilé (déploiement mono-port).
   // Le build est attendu dans frontend/dist (voir Dockerfile / README).

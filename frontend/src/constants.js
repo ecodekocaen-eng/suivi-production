@@ -57,6 +57,26 @@ export const STATUT_COLORS = {
   'Expédié': '#14a395',
 };
 
+// ── Impression des transferts (agent d'impression du PC atelier) ──
+export const IMPRIMANTES = ['A', 'B'];
+
+export const IMPRESSION_LABELS = {
+  EN_FILE: 'En file',
+  ENVOYE: 'Dans Edge Print',
+  IMPRIME: 'Imprimé',
+  ERREUR: 'Erreur',
+  ANNULE: 'Annulé',
+};
+
+// Pastille (badge) de chaque état d'envoi.
+export const IMPRESSION_CLASS = {
+  EN_FILE: 'badge-warning',
+  ENVOYE: 'badge-info',
+  IMPRIME: 'badge-success',
+  ERREUR: 'badge-danger',
+  ANNULE: '',
+};
+
 export const ROLE_LABELS = {
   ADMIN: 'Administrateur',
   OPERATEUR: 'Opérateur',

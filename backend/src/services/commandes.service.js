@@ -81,7 +81,7 @@ export function getCommande(id) {
 }
 
 // Noms (normalisés) des produits non comptés en mugs (étiquettes, accessoires…).
-async function typesNonComptes() {
+export async function typesNonComptes() {
   const rows = await prisma.produit.findMany({
     where: { compteMugs: false },
     select: { nom: true },

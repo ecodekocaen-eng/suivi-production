@@ -1025,6 +1025,27 @@ body.has-modal { overflow: hidden; }
 .releve .table th { position: static; }
 .releve-foot { margin-top: 1.5rem; font-size: .8rem; color: var(--muted); }
 
+/* ── File d'impression des transferts ───────────────────────── */
+.imp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: .75rem 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.imp-commande + .imp-commande { margin-top: 1.25rem; }
+.imp-commande-titre { display: flex; align-items: center; gap: .6rem; font-weight: 650; margin-bottom: .5rem; }
+.imp-groupe { border: 1px solid var(--border); border-radius: 12px; padding: .7rem .85rem; }
+.imp-groupe + .imp-groupe { margin-top: .6rem; }
+.imp-groupe-titre { display: flex; align-items: baseline; justify-content: space-between; gap: .25rem .75rem; flex-wrap: wrap; margin-bottom: .35rem; }
+.imp-groupe-titre .cell-sub { margin-top: 0; }
+.imp-groupe .field-hint { display: flex; align-items: center; gap: .35rem; margin: 0 0 .35rem; }
+.imp-groupe .field-hint svg { width: 14px; height: 14px; }
+.imp-fichier { display: flex; align-items: center; gap: .5rem .65rem; padding: .4rem .5rem; border-radius: 8px; flex-wrap: wrap; }
+.imp-fichier.is-checked { background: var(--brand-50); }
+.imp-fichier label { flex: 1; min-width: 160px; display: flex; align-items: center; gap: .45rem; font-size: .9rem; cursor: pointer; overflow-wrap: anywhere; }
+.imp-fichier label svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.imp-qte { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); }
+.imp-erreur { margin: 1rem 0 0; }
+.imp-note { margin: 1rem 0 0; }
+.imp-visuel { max-width: 320px; overflow-wrap: anywhere; font-size: .88rem; }
+.imp-message { color: var(--danger); max-width: 260px; }
+.imp-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: .25rem; flex-wrap: wrap; }
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .detail-grid { grid-template-columns: minmax(0, 1fr); }

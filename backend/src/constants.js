@@ -69,7 +69,19 @@ export const LOG_ACTIONS = {
   RELEVE_CREE: 'RELEVE_CREE',
   RELEVE_ANNULE: 'RELEVE_ANNULE',
   COMMANDES_EXCLUES_FACTURATION: 'COMMANDES_EXCLUES_FACTURATION',
+  IMPRESSION_DEMANDEE: 'IMPRESSION_DEMANDEE',
+  IMPRESSION_TERMINEE: 'IMPRESSION_TERMINEE',
+  IMPRESSION_ERREUR: 'IMPRESSION_ERREUR',
+  IMPRESSION_ANNULEE: 'IMPRESSION_ANNULEE',
 };
+
+// ── Impression des transferts (agent d'impression du PC atelier) ──
+// Imprimantes pilotées par l'agent : codes fixes, libellés envoyés par l'agent.
+export const IMPRIMANTES = ['A', 'B'];
+
+// Cycle d'un envoi : EN_FILE (attend l'agent) → ENVOYE (déposé dans Edge Print)
+// → IMPRIME ; ou ERREUR / ANNULE.
+export const STATUTS_IMPRESSION = ['EN_FILE', 'ENVOYE', 'IMPRIME', 'ERREUR', 'ANNULE'];
 
 // Actions liées aux comptes (pour le journal d'audit de la page Utilisateurs).
 export const USER_LOG_ACTIONS = ['USER_CREE', 'USER_MODIFIE', 'USER_SUPPRIME'];

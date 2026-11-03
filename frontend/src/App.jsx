@@ -18,7 +18,7 @@ function useMedia(requete) {
 }
 import { Routes, Route, Navigate, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  ClipboardList, Thermometer, Database, ChartColumn, Receipt, Building, Coffee, UserCog,
+  ClipboardList, Printer, Thermometer, Database, ChartColumn, Receipt, Building, Coffee, UserCog,
   LogOut, PanelLeftClose, PanelLeftOpen, Menu,
 } from 'lucide-react';
 import { useAuth } from './auth.jsx';
@@ -29,6 +29,7 @@ import mot from './assets/mot-ecodeko.png';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import CommandeDetail from './pages/CommandeDetail.jsx';
+import Impression from './pages/Impression.jsx';
 import Stats from './pages/Stats.jsx';
 import Clients from './pages/Clients.jsx';
 import Produits from './pages/Produits.jsx';
@@ -65,6 +66,7 @@ function sectionsPour(user) {
       titre: 'Production',
       liens: production ? [
         { to: '/', label: 'Tableau de suivi', icon: ClipboardList, actif: (p) => p === '/' || p.startsWith('/commandes') },
+        { to: '/impression', label: 'Impression', icon: Printer },
         { to: '/base', label: 'Base de données', icon: Database },
         { to: '/reglages', label: 'Réglages presse', icon: Thermometer },
       ] : [],
@@ -182,6 +184,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Protected wide><Dashboard /></Protected>} />
       <Route path="/commandes/:id" element={<Protected><CommandeDetail /></Protected>} />
+      <Route path="/impression" element={<Protected><Impression /></Protected>} />
       <Route path="/base" element={<Protected wide><BaseModeles /></Protected>} />
       <Route path="/reglages" element={<Protected><Reglages /></Protected>} />
       <Route path="/statistiques" element={<Protected><Stats /></Protected>} />

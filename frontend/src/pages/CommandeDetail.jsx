@@ -8,7 +8,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Pencil, Download, Trash, ArchiveRestore, Package, CalendarClock, CalendarDays, Factory, Euro,
   Layers, FolderOpen, Info, Check, Undo2, Truck, MessageSquareText, Link2, ExternalLink, ListChecks,
-  ScrollText, Plus, Upload, Flag, Thermometer, CircleDot, FileX, Receipt, Mail,
+  ScrollText, Plus, Upload, Flag, Thermometer, CircleDot, FileX, Receipt, Mail, Printer, PrinterCheck, Ban,
+  TriangleAlert,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -23,6 +24,8 @@ import Thumb, { imageProduit } from '../components/Thumb.jsx';
 import ReglageLigne from '../components/ReglageLigne.jsx';
 import DocumentsList from '../components/DocumentsList.jsx';
 import CommandeFormModal from '../components/CommandeFormModal.jsx';
+import ImpressionModal from '../components/ImpressionModal.jsx';
+import { ImpressionBadge } from '../components/ImpressionEtat.jsx';
 
 // Clé de correspondance d'un visuel (identique à la normalisation backend).
 const normVisuel = (s) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
@@ -40,6 +43,10 @@ const EVENEMENTS = {
   COMMANDE_SUPPRIMEE: { Icone: Trash, cls: 'is-danger' },
   COMMANDE_RESTAUREE: { Icone: ArchiveRestore, cls: 'is-status' },
   REGLAGE_ENREGISTRE: { Icone: Thermometer },
+  IMPRESSION_DEMANDEE: { Icone: Printer, cls: 'is-file' },
+  IMPRESSION_TERMINEE: { Icone: PrinterCheck, cls: 'is-status' },
+  IMPRESSION_ERREUR: { Icone: TriangleAlert, cls: 'is-danger' },
+  IMPRESSION_ANNULEE: { Icone: Ban },
 };
 
 function Fact({ icon: Icone, label, children, tone = null }) {
@@ -63,6 +70,7 @@ export default function CommandeDetail() {
   const [data, setData] = useState(null);
   const [erreur, setErreur] = useState(null);
   const [edition, setEdition] = useState(false);
+  const [impression, setImpression] = useState(false);
   const [statutBusy, setStatutBusy] = useState(false);
   const [produitsByNom, setProduitsByNom] = useState({});
 
@@ -116,6 +124,14 @@ export default function CommandeDetail() {
   const expediee = commande.statut === 'Expédié';
   const indexStatut = STATUTS.indexOf(commande.statut);
   const ech = echeance(commande);
+
+  // Envois à l'impression (du plus récent au plus ancien) : dernier état par ligne.
+  const impressions = data.impressions || [];
+  const dernierEnvoiLigne = {};
+  for (const i of impressions) dernierEnvoiLigne[i.ligneId ?? 'commande'] ||= i;
+  const peutImprimer = visuels.length > 0 && !commande.supprime;
+  // « Imprimer » est l'action principale tant que la commande attend son impression.
+  const imprimerEnAvant = peutImprimer && commande.statut === 'En attente';
 
   // Marge (réservée ADMIN) : (prix de vente − coût unitaire) × quantité.
   const coutU = commande.prixEsat != null ? commande.prixEsat : (produitsByNom[commande.typeMug]?.prixAchat ?? 0);
@@ -201,6 +217,7 @@ export default function CommandeDetail() {
             <span className="line-visuel">{l.visuel || 'Visuel sans nom'}</span>
             <span className="line-type">{l.typeMug || 'Type non précisé'}{accessoire ? ' · accessoire' : ''}</span>
           </div>
+          {dernierEnvoiLigne[l.id] && <ImpressionBadge impression={dernierEnvoiLigne[l.id]} />}
           <div className="line-qty">
             <strong>{fmtNumber(l.quantite)}</strong>
             <span>{accessoire ? 'pièces' : 'mugs'}</span>
@@ -258,7 +275,11 @@ export default function CommandeDetail() {
                 <button className="btn btn-secondary" onClick={remettreNonLue}
                         title="La commande redevient « non lue » dans le tableau de suivi"><Mail />Marquer non lue</button>
               )}
-              <button className="btn btn-primary" onClick={() => setEdition(true)}><Pencil />Modifier</button>
+              <button className={`btn ${imprimerEnAvant ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setEdition(true)}><Pencil />Modifier</button>
+              {peutImprimer && (
+                <button className={`btn ${imprimerEnAvant ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setImpression(true)}
+                        title="Envoyer les transferts au PC atelier (Edge Print)"><Printer />Imprimer</button>
+              )}
               {isAdmin && !commande.supprime && (
                 <button className="btn btn-danger-ghost btn-icon" onClick={supprimer}
                         title="Mettre à la corbeille" aria-label="Mettre à la corbeille"><Trash /></button>
@@ -353,6 +374,7 @@ export default function CommandeDetail() {
                       <span className="line-visuel">{commande.designation || 'Visuel sans nom'}</span>
                       <span className="line-type">{commande.typeMug || 'Type non précisé'}</span>
                     </div>
+                    {dernierEnvoiLigne.commande && <ImpressionBadge impression={dernierEnvoiLigne.commande} />}
                     <div className="line-qty"><strong>{fmtNumber(qte)}</strong><span>mugs</span></div>
                   </div>
                   <div className="line-body">
@@ -462,6 +484,13 @@ export default function CommandeDetail() {
           commande={commande}
           onClose={() => setEdition(false)}
           onSaved={() => { setEdition(false); toast.success('Commande enregistrée'); load(); }}
+        />
+      )}
+      {impression && (
+        <ImpressionModal
+          commandes={[{ ...commande, impressions }]}
+          onClose={() => setImpression(false)}
+          onSent={load}
         />
       )}
     </>

@@ -40,6 +40,7 @@ Inclus dans votre abonnement Vercel Pro (offres gratuites pour Neon et Blob dans
 | `ADMIN_EMAIL` | votre email (compte admin créé au 1er accès) |
 | `ADMIN_PASSWORD` | mot de passe admin (≥ 6 caractères) |
 | `BLOB_READ_WRITE_TOKEN` | *(ajouté automatiquement en connectant le store Blob)* |
+| `IMPRESSION_AGENT_TOKEN` | jeton de l'agent d'impression du PC atelier (`openssl rand -hex 32`), identique à celui de sa configuration. Sans lui, les routes `/api/agent` restent fermées. |
 
 `CORS_ORIGIN` n'est pas nécessaire (front et API sont sur le même domaine).
 
@@ -61,6 +62,9 @@ DATABASE_URL="postgresql://...-pooler.../neondb?sslmode=require" STORAGE_DRIVER=
 ## Notes
 
 - **Mises à jour** : chaque `git push` sur `main` redéploie automatiquement.
+- **Impression des transferts** : les tables `Impression` et `PosteImpression` sont créées
+  au démarrage (`bootstrap.js › ensureSchema`). L'agent du PC atelier dialogue avec
+  `/api/agent/impression/*` grâce à `IMPRESSION_AGENT_TOKEN`.
 - **Limite 4 Mo** par upload direct (fonctions Vercel) ; au-delà → lien WeTransfer/Smash.
 - Les visuels sont publics via une URL Blob non devinable ; ils sont **supprimés**
   automatiquement à l'expédition (comme en local).
