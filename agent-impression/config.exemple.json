@@ -1,0 +1,24 @@
+{
+  "serveur": "https://suivi-production-nine.vercel.app",
+  "jeton": "à remplacer par IMPRESSION_AGENT_TOKEN (jamais dans le dépôt)",
+  "poste": "PC atelier",
+  "intervalleSecondes": 15,
+  "heuresActives": { "jours": [1, 2, 3, 4, 5], "debut": "07:00", "fin": "19:00" },
+  "edgePrintDb": "C:\\ProgramData\\EPSON\\Epson Edge Print\\DB\\Data.db",
+  "imprimantes": {
+    "A": {
+      "libelle": "Printer_1 · n° …017",
+      "dossiers": [
+        { "copies": 10, "chemin": "C:\\EdgePrint-Agent\\A-MUG-x10" },
+        { "copies": 1, "chemin": "C:\\EdgePrint-Agent\\A-MUG-x1" }
+      ]
+    },
+    "B": {
+      "libelle": "La Hamada · n° …482",
+      "dossiers": [
+        { "copies": 10, "chemin": "C:\\EdgePrint-Agent\\B-MUG-x10" },
+        { "copies": 1, "chemin": "C:\\EdgePrint-Agent\\B-MUG-x1" }
+      ]
+    }
+  }
+}

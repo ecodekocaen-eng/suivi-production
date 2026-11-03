@@ -30,3 +30,9 @@ npm-debug.log*
 
 # Réglages locaux Claude Code
 .claude/settings.local.json
+
+# Agent d'impression : configuration (jeton), journal et fichiers de travail du poste
+agent-impression/config.json
+agent-impression/journal.json
+agent-impression/agent.log*
+agent-impression/travail/
