@@ -107,8 +107,12 @@ export async function show(req, res) {
     ? commande.lignes.map((l) => l.visuel)
     : [commande.designation];
   const reglages = await getReglagesForVisuels(visuels);
-  // Envois à l'impression (état par ligne sur la fiche).
-  const impressions = await impressionsDeCommande(commande.id);
+  // Envois à l'impression (état par ligne sur la fiche). Un souci de ce côté
+  // ne doit jamais empêcher d'ouvrir une commande.
+  const impressions = await impressionsDeCommande(commande.id).catch((err) => {
+    console.error('Envois à l’impression indisponibles :', err.message);
+    return [];
+  });
   res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions });
 }
 
