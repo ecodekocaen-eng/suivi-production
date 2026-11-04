@@ -10,7 +10,9 @@ param([switch]$SansDemarrer)
 
 $ErrorActionPreference = 'Stop'
 $nomTache = 'Ecodeko Agent Impression'
-$dossier = Join-Path $env:LOCALAPPDATA 'Ecodeko\agent-impression'
+# Pas dans AppData : lancé depuis l'application Claude, ce dossier serait redirigé
+# vers l'espace privé de l'application, invisible pour le Planificateur de tâches.
+$dossier = Join-Path $env:USERPROFILE 'Ecodeko\agent-impression'
 $node = Join-Path $env:ProgramFiles 'nodejs\node.exe'
 if (-not (Test-Path $node)) { throw "Node.js introuvable : $node" }
 
