@@ -21,13 +21,20 @@ import { parseIntSafe, cleanStr } from '../utils/parse.js';
 
 // Validité d'un lien d'envoi direct (large : connexion lente).
 const VALIDITE_LIEN_MS = 30 * 60 * 1000;
-// Référence d'un modèle : lettres et chiffres séparés par des tirets, ex. 104HE-22, 104HE-98B.
-const FORMAT_REFERENCE = /^[A-Z0-9]+(?:-[A-Z0-9]+)+$/;
+const LONGUEUR_MAX_REFERENCE = 60;
 
 // Accents décomposés (noms de fichiers venus d'un Mac) → forme usuelle, pour la recherche.
 const nfc = (s) => (s == null ? s : String(s).normalize('NFC'));
 
-export const normRef = (r) => String(r ?? '').trim().toUpperCase().replace(/\s+/g, '');
+// Référence d'un modèle : le format dépend du client (104HE-22, MUG 4 125 ETAR,
+// MUG 488GS01…). On la garde telle quelle, en majuscules et à espaces simples.
+export const normRef = (r) => nfc(String(r ?? '')).trim().toUpperCase().replace(/\s+/g, ' ');
+
+// Dossier de stockage d'une référence, sans espaces ni accents : « MUG 4 125 ETAR »
+// → MUG_4_125_ETAR. Vide si elle n'a ni lettre ni chiffre.
+// ⚠️ Identique à frontend/src/demandePrix.js : le navigateur y dépose les fichiers.
+const dossierRef = (reference) => normRef(reference).normalize('NFD').replace(/\p{M}/gu, '')
+  .replace(/[^A-Z0-9-]+/g, '_').replace(/^[_-]+|[_-]+$/g, '');
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -36,15 +43,19 @@ function httpError(status, message) {
 }
 
 // Dossier des fichiers d'un modèle : modeles/<REF>/<identifiant>/<nom sûr>.
-const prefixeModele = (reference) => `${BLOB_PREFIX}modeles/${reference}/`;
+const prefixeModele = (reference) => `${BLOB_PREFIX}modeles/${dossierRef(reference)}/`;
 
 function referenceValide(brute) {
   const reference = normRef(brute);
-  if (!FORMAT_REFERENCE.test(reference) || reference.length > 40) {
-    throw httpError(400, `Référence invalide : « ${brute ?? ''} » (format attendu : 104HE-22).`);
+  if (!dossierRef(reference) || reference.length > LONGUEUR_MAX_REFERENCE) {
+    throw httpError(400, `Référence invalide : « ${brute ?? ''} » (lettres ou chiffres, ${LONGUEUR_MAX_REFERENCE} caractères au plus).`);
   }
   return reference;
 }
+
+// Libellé d'une ligne de commande : « 104HE-22 Mug Je t'aime », ou la référence
+// seule quand le nom la répète (« MUG 488GS01 »).
+const libelleModele = (m) => (normRef(m.nom) === m.reference ? m.reference : `${m.reference} ${m.nom}`);
 
 async function loadModele(req) {
   const modele = await prisma.modele.findUnique({ where: { id: Number(req.params.id) } });
@@ -109,7 +120,7 @@ export async function televersementLocal(req, res) {
   const reference = referenceValide(req.body?.reference);
   const identifiant = crypto.randomBytes(8).toString('hex');
   const { key } = await saveBuffer(req.file.buffer, {
-    subdir: `modeles/${reference}/${identifiant}`, filename: nomSur(req.file.originalname), contentType: req.file.mimetype,
+    subdir: `modeles/${dossierRef(reference)}/${identifiant}`, filename: nomSur(req.file.originalname), contentType: req.file.mimetype,
   });
   res.status(201).json({ pathname: key });
 }
@@ -188,7 +199,7 @@ export async function creerCommande(req, res) {
     const m = parRef.get(refs[i]);
     return {
       typeMug: cleanStr(l.typeMug) ?? m?.typeMug ?? null,
-      visuel: m ? `${m.reference} ${m.nom}` : [refs[i], cleanStr(l.designation)].filter(Boolean).join(' ') || 'Visuel à préciser',
+      visuel: m ? libelleModele(m) : [refs[i], cleanStr(l.designation)].filter(Boolean).join(' ') || 'Visuel à préciser',
       quantite: parseIntSafe(l.quantite, 0),
       commentaire: m?.fichierChemin ? null : 'Modèle absent de la base de données : fichier à ajouter',
     };

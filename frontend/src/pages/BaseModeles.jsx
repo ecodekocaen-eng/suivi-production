@@ -18,7 +18,7 @@ import { PageHeader, EmptyState, Loading, SearchInput, usePageTitle } from '../u
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import Modal from '../ui/Modal.jsx';
 import { envoyerFichiers, deposerFichierModele } from '../televersement.js';
-import { analyserDemande, lireNomFichier, normRef } from '../demandePrix.js';
+import { analyserDemande, lireNomFichier, normRef, dossierRef } from '../demandePrix.js';
 
 const ACCEPT_MODELES = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
 const TYPE_PAR_DEFAUT = 'MUG BLANC';
@@ -381,13 +381,14 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
   const maj = (id, champs) => setFichiers((fs) => fs.map((f) => (f.id === id ? { ...f, ...champs } : f)));
 
   const refs = fichiers.map((f) => normRef(f.reference));
-  const aImporter = fichiers.filter((f) => normRef(f.reference) && f.etat !== 'ok');
+  const aImporter = fichiers.filter((f) => dossierRef(f.reference) && f.etat !== 'ok');
   const etat = (f, i) => {
     if (f.etat === 'ok') return <span className="text-success nowrap"><CircleCheck size={14} /> Importé</span>;
     if (f.etat === 'en-cours') return <span className="nowrap"><LoaderCircle size={14} className="spin" /> Envoi…</span>;
     if (f.etat === 'erreur') return <span className="text-danger">{f.message}</span>;
     const ref = refs[i];
     if (!ref) return <span className="muted">Pas de référence : ignoré</span>;
+    if (!dossierRef(ref)) return <span className="text-danger">Référence sans lettre ni chiffre : ignoré</span>;
     if (refs.indexOf(ref) !== i) return <span className="text-warning">En double : remplace le précédent</span>;
     return existants.has(ref) ? <span className="text-warning">Remplace le modèle existant</span> : <span className="muted">Nouveau</span>;
   };
@@ -419,7 +420,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
   return (
     <Modal
       title="Importer des modèles"
-      description="La référence et le nom sont lus dans le nom de chaque fichier (ex. « 104HE-22 Mug Je t’aime 225x95.pdf »). Une référence déjà présente est remplacée."
+      description="La référence et le nom sont lus dans le nom de chaque fichier (ex. « 104HE-22 Mug Je t’aime 225x95.pdf » ou « MUG 488GS01.pdf »). Vous pouvez les corriger dans la liste. Une référence déjà présente est remplacée."
       icon={<Upload />}
       size="lg"
       onClose={onClose}
@@ -467,7 +468,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
                 {fichiers.map((f, i) => (
                   <tr key={f.id}>
                     <td className="cell-trunc import-fichier" title={f.file.name}>{f.file.name}<span className="cell-sub">{fmtSize(f.file.size)}</span></td>
-                    <td><input value={f.reference} onChange={(e) => maj(f.id, { reference: e.target.value })} disabled={busy || f.etat === 'ok'} placeholder="ex. 104HE-22" /></td>
+                    <td><input value={f.reference} onChange={(e) => maj(f.id, { reference: e.target.value, etat: null, message: '' })} disabled={busy || f.etat === 'ok'} placeholder="ex. 104HE-22" /></td>
                     <td><input value={f.nom} onChange={(e) => maj(f.id, { nom: e.target.value })} disabled={busy || f.etat === 'ok'} /></td>
                     <td>{etat(f, i)}</td>
                   </tr>
