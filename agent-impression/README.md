@@ -43,7 +43,18 @@ Copier `config.exemple.json` en `config.json`. Ce fichier contient le jeton : il
 
 Dans un fichier JSON, chaque `\` d'un chemin Windows s'écrit `\\`.
 
-## Lancer
+## Installer sur le PC atelier
+
+```bash
+powershell -ExecutionPolicy Bypass -File installer.ps1
+```
+
+Le script copie le programme dans `%LOCALAPPDATA%\Ecodeko\agent-impression`, où doit se
+trouver `config.json`, et crée la tâche Windows « Ecodeko Agent Impression » qui lance
+l'agent sans fenêtre à l'ouverture de session. Il suffit de le relancer pour mettre
+l'agent à jour : `config.json` et `journal.json` sont conservés.
+
+## Lancer à la main
 
 - Un seul passage (essai) : `npm.cmd run une-fois`
 - En continu : `npm.cmd start`
