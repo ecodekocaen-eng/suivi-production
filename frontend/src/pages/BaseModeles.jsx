@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 //  Base de données des modèles (ex. mugs Heula) :
-//   - « Demande de prix » : on dépose le PDF du client, les références et
+//   - demande client : on dépose son PDF, Excel ou CSV, les références et
 //     quantités sont lues dans le navigateur, retrouvées dans la base, et la
 //     commande est créée avec le bon fichier d'impression sur chaque ligne ;
 //   - la base elle-même : vignettes, recherche, import par glisser-déposer (ADMIN).
@@ -18,10 +18,28 @@ import { PageHeader, EmptyState, Loading, SearchInput, usePageTitle } from '../u
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import Modal from '../ui/Modal.jsx';
 import { envoyerFichiers, deposerFichierModele } from '../televersement.js';
-import { analyserDemande, lireNomFichier, normRef, dossierRef } from '../demandePrix.js';
+import { analyserDemande, analyserTableau, lireNomFichier, normRef, dossierRef } from '../demandePrix.js';
 
 const ACCEPT_MODELES = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
+const TYPES_TABLEUR = {
+  csv: 'text/csv',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+const ACCEPT_DEMANDES = ['.pdf', 'application/pdf', ...Object.keys(TYPES_TABLEUR).map((e) => `.${e}`), ...Object.values(TYPES_TABLEUR)].join(',');
 const TYPE_PAR_DEFAUT = 'MUG BLANC';
+const typeTableur = (fichier) => TYPES_TABLEUR[fichier.name.match(/\.(csv|xlsx?)$/i)?.[1].toLowerCase()];
+
+// Lit une demande : texte du PDF, ou 1re feuille Excel / CSV où des lignes sont reconnues.
+async function lireDemande(fichier, references) {
+  if (!typeTableur(fichier)) {
+    const { lignesDuPdf } = await import('../pdf.js');
+    return analyserDemande(await lignesDuPdf(fichier));
+  }
+  const { feuillesDuTableur } = await import('../tableur.js');
+  const analyses = (await feuillesDuTableur(fichier)).map((feuille) => analyserTableau(feuille, references));
+  return analyses.find((a) => a.lignes.length > 0) || { lignes: [] };
+}
 
 const version = (m) => encodeURIComponent(m.updatedAt || '');
 const urlApercu = (m) => `/api/modeles/${m.id}/apercu?v=${version(m)}`;
@@ -92,12 +110,12 @@ function Apercu({ modele, className = '' }) {
   return <img className={className} src={urlApercu(modele)} alt="" loading="lazy" onError={() => setErreur(true)} />;
 }
 
-// ── Demande client (PDF) → commande ──────────────────────────
+// ── Demande client (PDF, Excel, CSV) → commande ──────────────
 
 function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const [pdf, setPdf] = useState(null);
+  const [demande, setDemande] = useState(null); // le fichier du client
   const [lecture, setLecture] = useState(false);
   const [analyse, setAnalyse] = useState(null);
   const [form, setForm] = useState({ client: '', nom: '', dateSortie: '' });
@@ -115,28 +133,30 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
 
   const lire = async ([fichier]) => {
     if (!fichier) return;
-    if (fichier.type !== 'application/pdf' && !/\.pdf$/i.test(fichier.name)) {
-      toast.error('Déposez la demande au format PDF.');
+    const tableur = Boolean(typeTableur(fichier));
+    if (!tableur && fichier.type !== 'application/pdf' && !/\.pdf$/i.test(fichier.name)) {
+      toast.error('Déposez la demande en PDF, Excel ou CSV.');
       return;
     }
     setLecture(true);
     try {
-      const { lignesDuPdf } = await import('../pdf.js');
-      const resultat = analyserDemande(await lignesDuPdf(fichier));
+      const resultat = await lireDemande(fichier, modeles.map((m) => m.reference));
       if (resultat.lignes.length === 0) {
-        toast.error('Aucune ligne « [référence] désignation … quantité » trouvée dans ce PDF.');
+        toast.error(tableur
+          ? 'Aucune ligne trouvée dans ce fichier : il faut une colonne de références et une colonne de quantités.'
+          : 'Aucune ligne « [référence] désignation … quantité » trouvée dans ce PDF.');
         return;
       }
-      // Client : celui des modèles retrouvés (ex. HEULA), sinon la société du PDF.
+      // Client : celui des modèles retrouvés (ex. HEULA), sinon la société de la demande.
       const clientsModeles = resultat.lignes.map((l) => parRef.get(l.reference)?.client).filter(Boolean);
       const client = clientsModeles.sort((a, b) => clientsModeles.filter((c) => c === b).length - clientsModeles.filter((c) => c === a).length)[0]
         || resultat.societe || '';
-      setPdf(fichier);
+      setDemande(fichier);
       setAnalyse(resultat);
       setAjouts({});
       setForm({
         client,
-        nom: resultat.numero ? `${resultat.type} ${resultat.numero}` : fichier.name.replace(/\.pdf$/i, ''),
+        nom: resultat.numero ? `${resultat.type} ${resultat.numero}` : fichier.name.replace(/\.[a-z0-9]+$/i, ''),
         dateSortie: resultat.dateExpedition || '',
       });
       setLignes(resultat.lignes.map((l, i) => ({
@@ -145,13 +165,13 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
         typeMug: parRef.get(l.reference)?.typeMug || (produits.includes(TYPE_PAR_DEFAUT) ? TYPE_PAR_DEFAUT : ''),
       })));
     } catch (err) {
-      toast.error(`Lecture du PDF impossible : ${err.message}`);
+      toast.error(`Lecture du fichier impossible : ${err.message}`);
     } finally {
       setLecture(false);
     }
   };
 
-  const recommencer = () => { setPdf(null); setAnalyse(null); setLignes([]); setAjouts({}); };
+  const recommencer = () => { setDemande(null); setAnalyse(null); setLignes([]); setAjouts({}); };
   const majLigne = (cle, champ, valeur) => setLignes((ls) => ls.map((l) => (l.cle === cle ? { ...l, [champ]: valeur } : l)));
   const retirerLigne = (cle) => setLignes((ls) => ls.filter((l) => l.cle !== cle));
 
@@ -210,9 +230,12 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
         dateSortieTexte: form.dateSortie,
         lignes: lignes.map(({ reference, designation, quantite, typeMug }) => ({ reference, designation, quantite, typeMug })),
       });
-      // La demande du client (PDF) rejoint les documents de la commande.
+      // La demande du client rejoint les documents de la commande. Selon le poste, un CSV
+      // arrive sans type ou en texte brut : on lui donne celui que le serveur attend.
+      const type = typeTableur(demande);
+      const piece = type ? new File([demande], demande.name, { type }) : demande;
       try {
-        await envoyerFichiers({ commandeId: commande.id, categorie: 'document', files: [pdf] });
+        await envoyerFichiers({ commandeId: commande.id, categorie: 'document', files: [piece] });
       } catch (err) {
         toast.error(`Commande créée, mais la demande n’a pas pu être jointe : ${err.message}`);
       }
@@ -233,11 +256,11 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
         </div>
         <div className="card-body">
           <ZoneDepot
-            accept="application/pdf"
+            accept={ACCEPT_DEMANDES}
             onFichiers={lire}
             busy={lecture}
             icone={<FileSearch />}
-            titre={lecture ? 'Lecture de la demande…' : 'Déposez la demande (PDF)'}
+            titre={lecture ? 'Lecture de la demande…' : 'Déposez la demande (PDF, Excel ou CSV)'}
             aide="Les références et les quantités sont lues automatiquement, puis retrouvées dans la base de données."
           />
         </div>
@@ -248,8 +271,8 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
   return (
     <div className="card">
       <div className="card-header">
-        <h2 className="card-title"><FileSearch />{analyse.numero ? `${analyse.type} ${analyse.numero}` : pdf.name}</h2>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={recommencer} disabled={busy}><RotateCcw />Autre PDF</button>
+        <h2 className="card-title"><FileSearch />{analyse.numero ? `${analyse.type} ${analyse.numero}` : demande.name}</h2>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={recommencer} disabled={busy}><RotateCcw />Autre fichier</button>
       </div>
       <div className="card-body stack">
         <div className="demande-resume">
