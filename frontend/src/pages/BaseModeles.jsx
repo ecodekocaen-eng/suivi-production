@@ -420,7 +420,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
   return (
     <Modal
       title="Importer des modèles"
-      description="La référence et le nom sont lus dans le nom de chaque fichier (ex. « 104HE-22 Mug Je t’aime 225x95.pdf » ou « MUG 488GS01.pdf »). Vous pouvez les corriger dans la liste. Une référence déjà présente est remplacée."
+      description="Par défaut, la référence est le nom du fichier (« MUG 488GS01.pdf » → MUG 488GS01). Une référence en tête de nom est reconnue (« 104HE-22 Mug Je t’aime.pdf » → 104HE-22). Corrigez-la dans la liste, ou videz-la pour ignorer le fichier. Une référence déjà présente est remplacée."
       icon={<Upload />}
       size="lg"
       onClose={onClose}

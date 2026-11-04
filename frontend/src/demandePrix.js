@@ -20,7 +20,7 @@ export const normRef = (r) => String(r ?? '').normalize('NFC').trim().toUpperCas
 // → MUG_4_125_ETAR. Vide si elle n'a ni lettre ni chiffre.
 // ⚠️ Identique à backend/src/controllers/modeles.controller.js, qui contrôle le chemin.
 export const dossierRef = (reference) => normRef(reference).normalize('NFD').replace(/\p{M}/gu, '')
-  .replace(/[^A-Z0-9-]+/g, '_').replace(/^[_-]+|[_-]+$/g, '');
+  .replace(/[^A-Z0-9-]+/g, '_').replace(/^[_-]+|[_-]+$/g, '').slice(0, 80);
 
 const nombre = (s) => Math.round(parseFloat(String(s).replace(/[\s  ]/g, '').replace(',', '.')) || 0);
 
@@ -59,23 +59,18 @@ export function analyserDemande(lignesTexte) {
   return { type, numero, dateExpedition: dateExpedition || lignes.find((l) => l.date)?.date || null, societe, lignes };
 }
 
-// Retire le format « 225x95 » et ce qui le suit.
-const sansFormat = (s) => s.replace(/[\s_-]*\d{2,3}\s*x\s*\d{2,3}\b.*$/i, '').replace(/\s+/g, ' ').trim();
-
-// Référence et nom d'un modèle d'après le nom de son fichier. Sans référence
-// reconnue (ex. « EXE Mug Flers.pdf »), reference est vide.
+// Référence et nom d'un modèle d'après le nom de son fichier : par défaut, le nom
+// du fichier lui-même, sans son extension.
 export function lireNomFichier(nomFichier) {
   // Noms venus d'un Mac (zip Smash…) : accents décomposés (NFD) → forme usuelle (NFC).
   // Le « (1) » d'un fichier téléchargé deux fois ne fait pas partie du nom.
   const base = String(nomFichier || '').normalize('NFC').replace(/\.[a-z0-9]{2,4}$/i, '').replace(/\s*\(\d+\)$/, '').trim();
+  // Référence en tête de nom, suivie de la désignation : les demandes citent 104HE-22 seul.
   const m = base.match(/^([A-Za-z0-9]{2,}-[A-Za-z0-9]+)(?:[\s_-]+(.*))?$/);
-  if (m) return { reference: normRef(m[1]), nom: sansFormat(m[2] || '') || normRef(m[1]) };
-  // Sans tiret, un PDF nommé en majuscules avec des chiffres est un code, donc la référence
-  // (« MUG 4 125 ETAR », « MUG 488GS01 »). Une phrase (« EXE Mug Flers ») ou une image
-  // (« 35 MUGS HEULA 2024.jpg », un catalogue) n'en est pas une.
-  const code = sansFormat(base);
-  if (/\.pdf$/i.test(nomFichier) && /\d/.test(code) && code === code.toUpperCase()) {
-    return { reference: normRef(code), nom: normRef(code) };
-  }
-  return { reference: '', nom: base };
+  if (!m) return { reference: normRef(base), nom: base };
+  const nom = (m[2] || '')
+    .replace(/[\s_-]*\d{2,3}\s*x\s*\d{2,3}\b.*$/i, '') // format « 225x95 » et ce qui suit
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { reference: normRef(m[1]), nom: nom || normRef(m[1]) };
 }

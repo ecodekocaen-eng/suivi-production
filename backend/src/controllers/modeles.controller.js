@@ -21,7 +21,8 @@ import { parseIntSafe, cleanStr } from '../utils/parse.js';
 
 // Validité d'un lien d'envoi direct (large : connexion lente).
 const VALIDITE_LIEN_MS = 30 * 60 * 1000;
-const LONGUEUR_MAX_REFERENCE = 60;
+// Une référence reprend souvent le nom d'un fichier : on laisse de la marge.
+const LONGUEUR_MAX_REFERENCE = 120;
 
 // Accents décomposés (noms de fichiers venus d'un Mac) → forme usuelle, pour la recherche.
 const nfc = (s) => (s == null ? s : String(s).normalize('NFC'));
@@ -34,7 +35,7 @@ export const normRef = (r) => nfc(String(r ?? '')).trim().toUpperCase().replace(
 // → MUG_4_125_ETAR. Vide si elle n'a ni lettre ni chiffre.
 // ⚠️ Identique à frontend/src/demandePrix.js : le navigateur y dépose les fichiers.
 const dossierRef = (reference) => normRef(reference).normalize('NFD').replace(/\p{M}/gu, '')
-  .replace(/[^A-Z0-9-]+/g, '_').replace(/^[_-]+|[_-]+$/g, '');
+  .replace(/[^A-Z0-9-]+/g, '_').replace(/^[_-]+|[_-]+$/g, '').slice(0, 80);
 
 function httpError(status, message) {
   const err = new Error(message);
