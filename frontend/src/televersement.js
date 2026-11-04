@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { fmtSize } from './format.js';
+import { dossierRef } from './demandePrix.js';
 
 // Au-delà, l'envoi direct passe en « multipart » : morceaux envoyés en
 // parallèle et renvoyés automatiquement en cas de coupure.
@@ -55,6 +56,24 @@ function dossier(commandeId, ligneId, categorie) {
   return ligneId ? `commande_${commandeId}/ligne_${ligneId}` : `commande_${commandeId}`;
 }
 
+// La bibliothèque Vercel jette la réponse du serveur quand il refuse le lien d'envoi
+// (« Failed to retrieve the presigned URL ») : on lui repose la question pour
+// donner la vraie raison. Rien n'est envoyé : il ne s'agit que de la demande de lien.
+async function raisonDuRefus(err, lienEnvoi, pathname, clientPayload) {
+  if (!/presigned URL/i.test(err?.message || '')) return err?.message || 'erreur réseau';
+  try {
+    const res = await fetch(lienEnvoi, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'blob.generate-presigned-url', payload: { pathname, clientPayload, multipart: false } }),
+    });
+    if (res.status === 401) return 'session expirée : reconnectez-vous, puis recommencez';
+    if (!res.ok) return (await res.json().catch(() => null))?.error || `erreur ${res.status}`;
+  } catch { /* réseau coupé : message général ci-dessous */ }
+  return 'le serveur n’a pas pu préparer l’envoi, réessayez';
+}
+
 // Fichiers trop gros : refusés avant tout envoi, avec un message clair.
 export async function verifierTailles(files) {
   const { tailleMax } = await chargerReglagesEnvoi();
@@ -85,13 +104,15 @@ export async function envoyerFichiers({ commandeId, ligneId = null, categorie = 
   const total = liste.reduce((s, f) => s + f.size, 0) || 1;
   let envoye = 0;
   const fichiers = [];
+  const lienEnvoi = `/api/commandes/${commandeId}/fichiers/direct`;
+  const clientPayload = JSON.stringify({ ligneId, categorie });
   for (const f of liste) {
     const pathname = `${reglages.prefixe || ''}${dossier(commandeId, ligneId, categorie)}/${identifiant()}/${nomSur(f.name)}`;
     try {
       await uploadPresigned(pathname, f, {
         access: 'private',
-        handleUploadUrl: `/api/commandes/${commandeId}/fichiers/direct`,
-        clientPayload: JSON.stringify({ ligneId, categorie }),
+        handleUploadUrl: lienEnvoi,
+        clientPayload,
         contentType: f.type || undefined,
         multipart: f.size > SEUIL_MULTIPART,
         onUploadProgress: ({ loaded }) => onProgress?.(Math.min(99, Math.round(((envoye + loaded) / total) * 100))),
@@ -105,7 +126,7 @@ export async function envoyerFichiers({ commandeId, ligneId = null, categorie = 
         envoye += f.size;
         continue;
       }
-      throw new Error(`Envoi de « ${f.name} » impossible : ${err.message || 'erreur réseau'}.`);
+      throw new Error(`Envoi de « ${f.name} » impossible : ${await raisonDuRefus(err, lienEnvoi, pathname, clientPayload)}.`);
     }
     envoye += f.size;
     const { fichier } = await api.post(`/commandes/${commandeId}/fichiers/direct/enregistrer`, {
@@ -134,13 +155,19 @@ export async function deposerFichierModele(reference, fichier, nom = fichier.nam
     return data.pathname;
   }
   const { uploadPresigned } = await import('@vercel/blob/client');
-  const pathname = `${reglages.prefixe || ''}modeles/${reference}/${identifiant()}/${nomSur(nom)}`;
-  await uploadPresigned(pathname, fichier, {
-    access: 'private',
-    handleUploadUrl: '/api/modeles/direct',
-    clientPayload: JSON.stringify({ reference }),
-    contentType: fichier.type || undefined,
-    multipart: fichier.size > SEUIL_MULTIPART,
-  });
+  const pathname = `${reglages.prefixe || ''}modeles/${dossierRef(reference)}/${identifiant()}/${nomSur(nom)}`;
+  const lienEnvoi = '/api/modeles/direct';
+  const clientPayload = JSON.stringify({ reference });
+  try {
+    await uploadPresigned(pathname, fichier, {
+      access: 'private',
+      handleUploadUrl: lienEnvoi,
+      clientPayload,
+      contentType: fichier.type || undefined,
+      multipart: fichier.size > SEUIL_MULTIPART,
+    });
+  } catch (err) {
+    throw new Error(await raisonDuRefus(err, lienEnvoi, pathname, clientPayload));
+  }
   return pathname;
 }
