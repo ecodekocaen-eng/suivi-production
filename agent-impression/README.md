@@ -6,7 +6,7 @@ Petit programme Node qui relie la **file d'impression** de l'outil de suivi à
 1. pendant les heures d'atelier, il demande au serveur les transferts à imprimer
    (jeton dédié, sans mot de passe) ;
 2. il télécharge chaque visuel et le dépose dans le **dossier surveillé** d'Edge Print
-   de l'imprimante choisie (A ou B), découpé selon les réglages rapides disponibles
+   de l'imprimante choisie (1 ou 2), découpé selon les réglages rapides disponibles
    (ex. 12 transferts = 1 fichier dans le dossier « ×10 » + 2 fichiers dans le dossier « ×1 ») ;
 3. il lit **sans la modifier** la base d'Edge Print (sur une copie) : dès qu'un travail est
    imprimé, seul ou dans une imbrication, il le signale. La commande passe en
@@ -39,7 +39,7 @@ Copier `config.exemple.json` en `config.json`. Ce fichier contient le jeton : il
 | `intervalleEdgePrintSecondes` | délai minimum entre deux lectures de la base d'Edge Print (60 s par défaut) |
 | `heuresActives` | jours (0 = dimanche) et heures de travail de l'agent. En dehors, il ne contacte pas le serveur : la base de données peut s'endormir. |
 | `edgePrintDb` | base d'Edge Print (lue sur une copie, jamais modifiée) |
-| `imprimantes.A` / `.B` | libellé, et dossiers surveillés avec le nombre d'exemplaires de leur réglage rapide. Un dossier `"copies": 1` est obligatoire. |
+| `imprimantes.A` / `.B` | imprimantes affichées « Imprimante 1 » et « Imprimante 2 » dans l'outil : libellé, et dossiers surveillés avec le nombre d'exemplaires de leur réglage rapide. Un dossier `"copies": 1` est obligatoire. |
 
 Dans un fichier JSON, chaque `\` d'un chemin Windows s'écrit `\\`.
 

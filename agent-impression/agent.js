@@ -19,7 +19,9 @@ import { fileURLToPath } from 'node:url';
 import { decouper, deposer } from './depot.js';
 import { lireTravauxAgent, estImprime, finImpression } from './edgeprint.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
+// Numéro affiché dans l'outil de suivi ; les codes A et B servent à la configuration.
+const NUMEROS = { A: 1, B: 2 };
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const UNE_FOIS = args.includes('--une-fois');
@@ -144,11 +146,11 @@ async function deposerEnvoi(cfg, journal, t) {
   const deja = journal[t.id];
   if (deja?.fichiers?.length) {
     // Déjà déposé (redémarrage, ou signalement perdu) : on le signale de nouveau, sans redéposer.
-    await signaler(cfg, t.id, 'ENVOYE', `Déposé dans Edge Print (imprimante ${deja.imprimante}) : ${resume(deja.fichiers)}`);
+    await signaler(cfg, t.id, 'ENVOYE', `Déposé dans Edge Print (imprimante ${NUMEROS[deja.imprimante]}) : ${resume(deja.fichiers)}`);
     return;
   }
   const imprimante = cfg.imprimantes[t.imprimante];
-  if (!imprimante) return erreur(cfg, t, `Imprimante ${t.imprimante} non configurée sur le PC atelier.`);
+  if (!imprimante) return erreur(cfg, t, `Imprimante ${NUMEROS[t.imprimante]} non configurée sur le PC atelier.`);
   if (!t.fichier) return erreur(cfg, t, 'Visuel introuvable sur le serveur (supprimé ?).');
   const extension = extensionDe(t.fichier);
   if (!extension) return erreur(cfg, t, `Type de fichier non pris en charge par l'agent (${t.fichier.type}).`);
@@ -183,8 +185,8 @@ async function deposerEnvoi(cfg, journal, t) {
   journal[t.id] = { depose: new Date().toISOString(), imprimante: t.imprimante, commande: t.commande.reference, fichiers };
   ecrireJournal(journal);
   const detail = resume(fichiers);
-  log(`Envoi #${t.id} (${t.commande.reference}, « ${t.fichierNom} » × ${t.quantite}) déposé sur ${t.imprimante} : ${detail}`);
-  await signaler(cfg, t.id, 'ENVOYE', `Déposé dans Edge Print (imprimante ${t.imprimante}) : ${detail}`);
+  log(`Envoi #${t.id} (${t.commande.reference}, « ${t.fichierNom} » × ${t.quantite}) déposé sur l'imprimante ${NUMEROS[t.imprimante]} : ${detail}`);
+  await signaler(cfg, t.id, 'ENVOYE', `Déposé dans Edge Print (imprimante ${NUMEROS[t.imprimante]}) : ${detail}`);
   return undefined;
 }
 

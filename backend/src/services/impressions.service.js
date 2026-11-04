@@ -7,10 +7,10 @@ import crypto from 'node:crypto';
 import { prisma } from '../prisma.js';
 import { addLog } from './log.service.js';
 import { updateCommande, typesNonComptes } from './commandes.service.js';
-import { LOG_ACTIONS, IMPRIMANTES } from '../constants.js';
+import { LOG_ACTIONS, IMPRIMANTES, IMPRIMANTE_NUMEROS } from '../constants.js';
 
 // Bornes d'un envoi.
-const QUANTITE_MAX = 500;
+const QUANTITE_MAX = 2000;
 const VISUELS_MAX = 200;
 // Sans nouvelles de l'agent depuis ce délai, le PC atelier est affiché hors ligne.
 const DELAI_EN_LIGNE_MS = 90 * 1000;
@@ -32,6 +32,7 @@ function httpError(status, message) {
 
 const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 const texteCourt = (s, max = 300) => (s == null ? null : String(s).trim().slice(0, max) || null);
+const nomImprimante = (code) => `imprimante ${IMPRIMANTE_NUMEROS[code] ?? code}`;
 
 async function trouverEnvoi(id) {
   const envoi = await prisma.impression.findUnique({ where: { id: Number(id) } });
@@ -39,21 +40,26 @@ async function trouverEnvoi(id) {
   return envoi;
 }
 
-// Crée un lot d'impression : [{ fichierId, quantite }] sur l'imprimante A ou B.
-// Les visuels peuvent venir de plusieurs commandes (page Impression).
+// Crée un lot d'impression : [{ fichierId, quantite, imprimante }]. Les visuels
+// peuvent venir de plusieurs commandes (page Impression), et un même visuel
+// peut être réparti entre les deux imprimantes. L'`imprimante` commune sert
+// aux éléments qui n'en précisent pas.
 export async function creerEnvoi({ imprimante, elements } = {}, user) {
-  if (!IMPRIMANTES.includes(imprimante)) throw httpError(400, 'Choisissez l’imprimante A ou B.');
   if (!Array.isArray(elements) || elements.length === 0) throw httpError(400, 'Aucun visuel à imprimer.');
   if (elements.length > VISUELS_MAX) throw httpError(400, `Trop de visuels en un envoi (${VISUELS_MAX} au maximum).`);
 
-  const demandes = elements.map((e) => ({ fichierId: Number(e?.fichierId), quantite: Number(e?.quantite) }));
+  const demandes = elements.map((e) => ({
+    fichierId: Number(e?.fichierId), quantite: Number(e?.quantite), imprimante: e?.imprimante ?? imprimante,
+  }));
+  if (demandes.some((d) => !IMPRIMANTES.includes(d.imprimante))) throw httpError(400, 'Choisissez l’imprimante 1 ou 2.');
   if (demandes.some((d) => !Number.isInteger(d.fichierId) || !Number.isInteger(d.quantite)
       || d.quantite < 1 || d.quantite > QUANTITE_MAX)) {
     throw httpError(400, `Quantité invalide : de 1 à ${QUANTITE_MAX} transferts par visuel.`);
   }
-  const ids = demandes.map((d) => d.fichierId);
-  if (new Set(ids).size !== ids.length) throw httpError(400, 'Un même visuel figure deux fois dans l’envoi.');
+  const cles = new Set(demandes.map((d) => `${d.fichierId}-${d.imprimante}`));
+  if (cles.size !== demandes.length) throw httpError(400, 'Un même visuel figure deux fois sur la même imprimante.');
 
+  const ids = [...new Set(demandes.map((d) => d.fichierId))];
   const fichiers = await prisma.fichier.findMany({
     where: { id: { in: ids }, categorie: 'VISUEL' },
     include: { commande: { select: { supprime: true } } },
@@ -68,7 +74,7 @@ export async function creerEnvoi({ imprimante, elements } = {}, user) {
     return prisma.impression.create({
       data: {
         commandeId: f.commandeId, ligneId: f.ligneId, fichierId: f.id, fichierNom: f.nom,
-        quantite: d.quantite, imprimante, lot, creeParId: user.id, creeParNom: user.nom,
+        quantite: d.quantite, imprimante: d.imprimante, lot, creeParId: user.id, creeParNom: user.nom,
       },
     });
   }));
@@ -76,15 +82,20 @@ export async function creerEnvoi({ imprimante, elements } = {}, user) {
   // Une ligne d'historique par commande concernée.
   const parCommande = new Map();
   for (const i of creees) {
-    const c = parCommande.get(i.commandeId) || { transferts: 0, visuels: 0 };
+    const c = parCommande.get(i.commandeId) || { transferts: 0, visuels: new Set(), parImprimante: new Map() };
     c.transferts += i.quantite;
-    c.visuels += 1;
+    c.visuels.add(i.fichierId);
+    c.parImprimante.set(i.imprimante, (c.parImprimante.get(i.imprimante) || 0) + i.quantite);
     parCommande.set(i.commandeId, c);
   }
   for (const [commandeId, c] of parCommande) {
+    const repartition = [...c.parImprimante];
+    const ou = repartition.length === 1
+      ? ` sur l'${nomImprimante(repartition[0][0])}`
+      : `, dont ${repartition.map(([code, n]) => `${n} sur l'${nomImprimante(code)}`).join(' et ')}`;
     await addLog({
       action: LOG_ACTIONS.IMPRESSION_DEMANDEE,
-      detail: `Envoi à l'impression : ${pluriel(c.transferts, 'transfert')} (${pluriel(c.visuels, 'visuel')}) sur l'imprimante ${imprimante}`,
+      detail: `Envoi à l'impression : ${pluriel(c.transferts, 'transfert')} (${pluriel(c.visuels.size, 'visuel')})${ou}`,
       userId: user.id,
       commandeId,
     });
@@ -135,7 +146,7 @@ export async function fileImpression() {
         },
         impressions: {
           orderBy: { createdAt: 'desc' },
-          select: { id: true, fichierId: true, ligneId: true, statut: true, imprimante: true, quantite: true, createdAt: true, imprimeAt: true },
+          select: { id: true, fichierId: true, ligneId: true, lot: true, statut: true, imprimante: true, quantite: true, createdAt: true, imprimeAt: true },
         },
       },
     }),
@@ -149,12 +160,21 @@ export async function fileImpression() {
   return { aImprimer, envois, poste };
 }
 
+// Envoi qui retient sa ligne : encore en file ou dans Edge Print, ou en erreur
+// sans avoir été refait depuis. Un envoi d'un même lot n'est pas une reprise :
+// c'est l'autre part d'un visuel réparti sur les deux imprimantes.
+function retientSaLigne(envoi, envois) {
+  if (STATUTS_ACTIFS.includes(envoi.statut)) return true;
+  return envoi.statut === 'ERREUR' && !envois.some((e) => e.fichierId === envoi.fichierId
+    && e.lot !== envoi.lot && e.id > envoi.id && e.statut !== 'ANNULE');
+}
+
 // Après chaque visuel imprimé : historique, puis passage de la commande en
 // « Impression OK » si toutes ses lignes (hors accessoires) ont été imprimées.
 async function apresImpression(envoi, userId) {
   await addLog({
     action: LOG_ACTIONS.IMPRESSION_TERMINEE,
-    detail: `Imprimé : « ${envoi.fichierNom} » × ${envoi.quantite} (imprimante ${envoi.imprimante})`,
+    detail: `Imprimé : « ${envoi.fichierNom} » × ${envoi.quantite} (${nomImprimante(envoi.imprimante)})`,
     userId,
     commandeId: envoi.commandeId,
   });
@@ -164,7 +184,7 @@ async function apresImpression(envoi, userId) {
     include: {
       lignes: { select: { id: true, typeMug: true } },
       fichiers: { where: { categorie: 'VISUEL' }, select: { ligneId: true } },
-      impressions: { where: { statut: 'IMPRIME' }, select: { ligneId: true } },
+      impressions: { select: { id: true, ligneId: true, fichierId: true, lot: true, statut: true } },
     },
   });
   if (!commande || commande.supprime || commande.statut !== 'En attente') return;
@@ -173,11 +193,12 @@ async function apresImpression(envoi, userId) {
   const lignesAvecVisuel = new Set(commande.fichiers.map((f) => f.ligneId).filter((id) => id != null));
   const aImprimer = commande.lignes.filter((l) => lignesAvecVisuel.has(l.id)
     && !accessoires.has((l.typeMug || '').trim().toUpperCase()));
-  const imprimees = new Set(commande.impressions.map((i) => i.ligneId));
+  const imprimees = new Set(commande.impressions.filter((i) => i.statut === 'IMPRIME').map((i) => i.ligneId));
+  const retenues = new Set(commande.impressions.filter((i) => retientSaLigne(i, commande.impressions)).map((i) => i.ligneId));
   // Visuels au niveau de la commande (sans ligne) : un visuel imprimé suffit.
   const complete = aImprimer.length > 0
-    ? aImprimer.every((l) => imprimees.has(l.id))
-    : commande.impressions.length > 0;
+    ? aImprimer.every((l) => imprimees.has(l.id) && !retenues.has(l.id))
+    : imprimees.size > 0 && retenues.size === 0;
   if (complete) await updateCommande(commande.id, { statut: 'Impression OK' }, userId);
 }
 

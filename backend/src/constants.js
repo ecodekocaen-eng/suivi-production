@@ -78,6 +78,8 @@ export const LOG_ACTIONS = {
 // ── Impression des transferts (agent d'impression du PC atelier) ──
 // Imprimantes pilotées par l'agent : codes fixes, libellés envoyés par l'agent.
 export const IMPRIMANTES = ['A', 'B'];
+// Numéro affiché (« Imprimante 1 ») : les codes A et B restent en interne (base, agent, dossiers).
+export const IMPRIMANTE_NUMEROS = { A: 1, B: 2 };
 
 // Cycle d'un envoi : EN_FILE (attend l'agent) → ENVOYE (déposé dans Edge Print)
 // → IMPRIME ; ou ERREUR / ANNULE.

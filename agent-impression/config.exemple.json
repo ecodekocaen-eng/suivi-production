@@ -8,14 +8,14 @@
   "edgePrintDb": "C:\\ProgramData\\EPSON\\Epson Edge Print\\DB\\Data.db",
   "imprimantes": {
     "A": {
-      "libelle": "Printer_1 · n° …017",
+      "libelle": "Printer_1",
       "dossiers": [
         { "copies": 10, "chemin": "C:\\EdgePrint-Agent\\A-MUG-x10" },
         { "copies": 1, "chemin": "C:\\EdgePrint-Agent\\A-MUG-x1" }
       ]
     },
     "B": {
-      "libelle": "La Hamada · n° …482",
+      "libelle": "La Hamada",
       "dossiers": [
         { "copies": 10, "chemin": "C:\\EdgePrint-Agent\\B-MUG-x10" },
         { "copies": 1, "chemin": "C:\\EdgePrint-Agent\\B-MUG-x1" }

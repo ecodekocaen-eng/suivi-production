@@ -25,7 +25,7 @@ import ReglageLigne from '../components/ReglageLigne.jsx';
 import DocumentsList from '../components/DocumentsList.jsx';
 import CommandeFormModal from '../components/CommandeFormModal.jsx';
 import ImpressionModal from '../components/ImpressionModal.jsx';
-import { ImpressionBadge } from '../components/ImpressionEtat.jsx';
+import { ImpressionBadge, derniersEnvoisPar } from '../components/ImpressionEtat.jsx';
 
 // Clé de correspondance d'un visuel (identique à la normalisation backend).
 const normVisuel = (s) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
@@ -125,10 +125,10 @@ export default function CommandeDetail() {
   const indexStatut = STATUTS.indexOf(commande.statut);
   const ech = echeance(commande);
 
-  // Envois à l'impression (du plus récent au plus ancien) : dernier état par ligne.
+  // Envois à l'impression (du plus récent au plus ancien) : derniers états par ligne.
   const impressions = data.impressions || [];
-  const dernierEnvoiLigne = {};
-  for (const i of impressions) dernierEnvoiLigne[i.ligneId ?? 'commande'] ||= i;
+  const derniersEnvois = derniersEnvoisPar(impressions, (i) => i.ligneId ?? 'commande');
+  const badgesEnvois = (cle) => (derniersEnvois.get(cle) || []).map((i) => <ImpressionBadge impression={i} key={i.id} />);
   const peutImprimer = visuels.length > 0 && !commande.supprime;
   // « Imprimer » est l'action principale tant que la commande attend son impression.
   const imprimerEnAvant = peutImprimer && commande.statut === 'En attente';
@@ -217,7 +217,7 @@ export default function CommandeDetail() {
             <span className="line-visuel">{l.visuel || 'Visuel sans nom'}</span>
             <span className="line-type">{l.typeMug || 'Type non précisé'}{accessoire ? ' · accessoire' : ''}</span>
           </div>
-          {dernierEnvoiLigne[l.id] && <ImpressionBadge impression={dernierEnvoiLigne[l.id]} />}
+          {badgesEnvois(l.id)}
           <div className="line-qty">
             <strong>{fmtNumber(l.quantite)}</strong>
             <span>{accessoire ? 'pièces' : 'mugs'}</span>
@@ -374,7 +374,7 @@ export default function CommandeDetail() {
                       <span className="line-visuel">{commande.designation || 'Visuel sans nom'}</span>
                       <span className="line-type">{commande.typeMug || 'Type non précisé'}</span>
                     </div>
-                    {dernierEnvoiLigne.commande && <ImpressionBadge impression={dernierEnvoiLigne.commande} />}
+                    {badgesEnvois('commande')}
                     <div className="line-qty"><strong>{fmtNumber(qte)}</strong><span>mugs</span></div>
                   </div>
                   <div className="line-body">

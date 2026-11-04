@@ -14,7 +14,7 @@ export async function poste(req, res) {
   res.json({ poste: await service.etatPoste() });
 }
 
-// { imprimante: 'A' | 'B', elements: [{ fichierId, quantite }] }
+// { elements: [{ fichierId, quantite, imprimante: 'A' | 'B' }] }, ou une `imprimante` commune à tous.
 export async function create(req, res) {
   const impressions = await service.creerEnvoi(req.body, req.user);
   res.status(201).json({ impressions });
