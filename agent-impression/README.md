@@ -13,8 +13,9 @@ Petit programme Node qui relie la **file d'impression** de l'outil de suivi à
    « Impression OK » quand toutes ses lignes sont imprimées.
 
 Les fichiers déposés portent un nom lisible et un marqueur, par exemple
-`2026-0138 104HE-22 Mug Je t'aime x10 [EDK57-1].pdf` : le marqueur `[EDK57-1]`
-(envoi 57, fichier 1) permet de retrouver le travail dans Edge Print.
+`2026-0138 104HE-22 Mug Je t'aime x10 [EDK57-3f9a1c-1].pdf` : le marqueur
+`[EDK57-3f9a1c-1]` (envoi 57, début du lot, fichier 1) permet de retrouver le travail
+dans Edge Print, sans jamais le confondre avec un ancien travail.
 
 ## Prérequis
 
@@ -35,6 +36,7 @@ Copier `config.exemple.json` en `config.json`. Ce fichier contient le jeton : il
 | `jeton` | la valeur de `IMPRESSION_AGENT_TOKEN` (variable d'environnement Vercel) |
 | `poste` | nom affiché dans l'outil (« PC atelier ») |
 | `intervalleSecondes` | délai entre deux passages (15 s par défaut) |
+| `intervalleEdgePrintSecondes` | délai minimum entre deux lectures de la base d'Edge Print (60 s par défaut) |
 | `heuresActives` | jours (0 = dimanche) et heures de travail de l'agent. En dehors, il ne contacte pas le serveur : la base de données peut s'endormir. |
 | `edgePrintDb` | base d'Edge Print (lue sur une copie, jamais modifiée) |
 | `imprimantes.A` / `.B` | libellé, et dossiers surveillés avec le nombre d'exemplaires de leur réglage rapide. Un dossier `"copies": 1` est obligatoire. |

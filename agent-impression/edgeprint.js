@@ -10,7 +10,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 export function lireTravauxAgent(cheminDb, dossierTravail) {
   const copie = path.join(dossierTravail, 'edgeprint-copie.db');
-  fs.copyFileSync(cheminDb, copie);
+  // Lecture Node (fichier partagé) plutôt que copie Windows : Edge Print n'est jamais gêné.
+  fs.writeFileSync(copie, fs.readFileSync(cheminDb));
   const db = new DatabaseSync(copie, { readOnly: true });
   try {
     return db.prepare(`

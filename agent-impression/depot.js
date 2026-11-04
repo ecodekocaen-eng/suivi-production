@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 //  Dépôt dans les dossiers surveillés d'Edge Print : découpage de la
 //  quantité selon les réglages rapides disponibles (ex. ×10 et ×1),
-//  noms de fichiers lisibles avec un marqueur [EDK<envoi>-<n>], et dépôt
+//  noms de fichiers lisibles avec un marqueur [EDK<envoi>-<lot>-<n>], et dépôt
 //  « d'un coup » (Edge Print ne voit jamais un fichier à moitié copié).
 // ─────────────────────────────────────────────────────────────
 import fs from 'node:fs';
@@ -24,16 +24,18 @@ export function decouper(quantite, dossiers) {
   return plan;
 }
 
-export const marqueur = (envoiId, numero) => `[EDK${envoiId}-${numero}]`;
+// Marqueur du fichier dans Edge Print. Le début du lot le rend unique : un numéro
+// d'envoi seul pourrait resservir (essais locaux) et désigner un ancien travail imprimé.
+export const marqueur = (travail, numero) => `[EDK${travail.id}-${String(travail.lot).slice(0, 6)}-${numero}]`;
 
 // Caractères interdits dans un nom de fichier Windows.
 const nomPropre = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim();
 
-// « 2026-0138 104HE-22 Mug Je t'aime x10 [EDK57-1].pdf » : lisible dans la liste
-// d'Edge Print, et le marqueur permet de retrouver le travail dans sa base.
+// « 2026-0138 104HE-22 Mug Je t'aime x10 [EDK57-3f9a1c-1].pdf » : lisible dans la
+// liste d'Edge Print, et le marqueur permet de retrouver le travail dans sa base.
 export function nomDepot(travail, copies, numero, extension) {
   const visuel = nomPropre(travail.ligne?.visuel || path.parse(travail.fichierNom || '').name).slice(0, 70);
-  return `${nomPropre(travail.commande.reference)} ${visuel} x${copies} ${marqueur(travail.id, numero)}${extension}`;
+  return `${nomPropre(travail.commande.reference)} ${visuel} x${copies} ${marqueur(travail, numero)}${extension}`;
 }
 
 // Dépose le fichier téléchargé selon le plan ; renvoie les fichiers déposés.
@@ -57,7 +59,7 @@ export function deposer(source, travail, plan, extension, dossierTravail) {
           fs.copyFileSync(temporaire, path.join(lot.chemin, nom));
           fs.rmSync(temporaire, { force: true });
         }
-        deposes.push({ nom, dossier: lot.chemin, copies: lot.copies, marqueur: marqueur(travail.id, numero) });
+        deposes.push({ nom, dossier: lot.chemin, copies: lot.copies, marqueur: marqueur(travail, numero) });
       }
     }
   } catch (err) {

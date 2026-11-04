@@ -63,6 +63,7 @@ function chargerConfig() {
   return {
     poste: 'PC atelier',
     intervalleSecondes: 15,
+    intervalleEdgePrintSecondes: 60,
     edgePrintDb: 'C:\\ProgramData\\EPSON\\Epson Edge Print\\DB\\Data.db',
     dossierTravail: path.join(DOSSIER, 'travail'),
     ...cfg,
@@ -216,6 +217,8 @@ function etatsImpression(cfg, journal, envoyes) {
 }
 
 // ── Un passage complet ──
+let derniereLectureEdge = 0;
+
 async function tour(cfg) {
   const journal = lireJournal();
   const { travaux } = await appel(cfg, 'POST', '/impression/synchro', {
@@ -230,8 +233,10 @@ async function tour(cfg) {
       log(`Envoi #${t.id} : ${err.message}`);
     }
   }
+  // Base d'Edge Print : lue seulement si un envoi attend, et pas à chaque passage.
   const envoyes = travaux.filter((x) => x.statut === 'ENVOYE');
-  if (envoyes.length === 0) return;
+  if (envoyes.length === 0 || Date.now() - derniereLectureEdge < cfg.intervalleEdgePrintSecondes * 1000) return;
+  derniereLectureEdge = Date.now();
   for (const r of etatsImpression(cfg, journal, envoyes)) {
     await signaler(cfg, r.id, r.etat, r.message);
     log(`Envoi #${r.id} : ${r.etat === 'IMPRIME' ? 'imprimé' : 'erreur'} (${r.message})`);
