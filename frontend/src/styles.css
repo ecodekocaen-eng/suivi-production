@@ -791,6 +791,8 @@ body.has-modal { overflow: hidden; }
 .modele-apercu:hover .modele-ouvrir, .modele-apercu:focus-visible .modele-ouvrir { opacity: 1; }
 .modele-sans-apercu { display: grid; place-items: center; width: 100%; height: 100%; color: var(--faint); }
 .modele-sans-apercu svg { width: 22px; height: 22px; }
+.modele-creer-apercu { position: absolute; top: .45rem; left: .45rem; }
+.filtre-client { width: auto; max-width: 240px; height: 38px; }
 .modele-infos { display: flex; flex-direction: column; gap: .12rem; padding: .6rem .75rem .7rem; min-width: 0; }
 .modele-nom { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .modele-meta { font-size: .8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

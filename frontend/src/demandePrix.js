@@ -19,6 +19,11 @@ const RE_DATE = /\b(\d{1,2}\/\d{1,2}\/\d{4})\b/;
 // Référence en majuscules et à espaces simples (« mug  4 125 etar » → MUG 4 125 ETAR).
 export const normRef = (r) => String(r ?? '').normalize('NFC').trim().toUpperCase().replace(/\s+/g, ' ');
 
+// Clé de comparaison, sans espaces ni ponctuation : une même référence s'écrit « MUG 4198 VT 28 »
+// sur le fichier et « MUG 4198VT28 » sur la demande.
+// ⚠️ Identique à backend/src/controllers/modeles.controller.js.
+export const cleRef = (r) => normRef(r).normalize('NFD').replace(/\p{M}/gu, '').replace(/[^A-Z0-9]/g, '');
+
 // Dossier de stockage d'une référence, sans espaces ni accents : « MUG 4 125 ETAR »
 // → MUG_4_125_ETAR. Vide si elle n'a ni lettre ni chiffre.
 // ⚠️ Identique à backend/src/controllers/modeles.controller.js, qui contrôle le chemin.
@@ -139,7 +144,7 @@ function dateCellule(cellule) {
 // Odoo), ou référence de la base, seule ou dans un texte (sans prendre 104HE-2 pour 104HE-22).
 function chercheurDeReference(referencesConnues) {
   const connues = [...new Set(referencesConnues.map(normRef))].filter(Boolean).sort((a, b) => b.length - a.length);
-  const exactes = new Set(connues);
+  const parCle = new Map(connues.map((reference) => [cleRef(reference), reference]));
   const bordDeMot = /[A-Z0-9]/;
   const contient = (texte, reference) => {
     const i = texte.indexOf(reference);
@@ -150,8 +155,7 @@ function chercheurDeReference(referencesConnues) {
     if (!texte) return null;
     const crochets = texte.match(/\[\s*([^[\]]{2,60}?)\s*\]/);
     if (crochets) return normRef(crochets[1]);
-    if (exactes.has(texte)) return texte;
-    return connues.find((reference) => contient(texte, reference)) || null;
+    return parCle.get(cleRef(texte)) || connues.find((reference) => contient(texte, reference)) || null;
   };
 }
 
@@ -229,6 +233,31 @@ export function analyserTableau(rangees, referencesConnues = []) {
   const texte = enTexte.join('\n');
   const { type, numero, dateExpedition } = lireEntete(texte);
   return { type, numero, dateExpedition: dateExpedition || lignes.find((l) => l.date)?.date || null, societe: societeDuPied(texte), lignes };
+}
+
+// Lettres en plus ou en moins entre deux références jugées proches.
+const ECART_PROCHE = 4;
+
+// Les caractères de `court` se retrouvent tous, dans l'ordre, dans `long`.
+function estIncluse(court, long) {
+  let i = 0;
+  for (const c of long) if (c === court[i]) i += 1;
+  return i === court.length;
+}
+
+// Modèles dont la référence ressemble à celle d'une demande, à proposer sans jamais les
+// retenir d'office : « MUG 4198 TELEBLASON » et « MUG 4198 H TELEB BLASON ». Chiffres identiques
+// et aucune lettre remplacée, car VT 28 / VT 30 ou PAPA / PAPY sont bien d'autres mugs.
+export function modelesProches(reference, modeles) {
+  const cle = cleRef(reference);
+  if (!cle) return [];
+  const chiffres = (c) => c.replace(/\D/g, '');
+  return modeles.filter((m) => {
+    const autre = cleRef(m.reference);
+    const [court, long] = cle.length < autre.length ? [cle, autre] : [autre, cle];
+    const ecart = long.length - court.length;
+    return ecart > 0 && ecart <= ECART_PROCHE && chiffres(cle) === chiffres(autre) && estIncluse(court, long);
+  }).slice(0, 3);
 }
 
 // Référence et nom d'un modèle d'après le nom de son fichier : par défaut, le nom

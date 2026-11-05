@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Database, FileSearch, FileText, TriangleAlert, CircleCheck, Pencil, Trash, Upload, LoaderCircle,
-  ExternalLink, X, RotateCcw, SearchX, PackagePlus, ArrowRight, Check,
+  ExternalLink, X, RotateCcw, SearchX, PackagePlus, ArrowRight, Check, ImagePlus,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -18,7 +18,7 @@ import { PageHeader, EmptyState, Loading, SearchInput, usePageTitle } from '../u
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import Modal from '../ui/Modal.jsx';
 import { envoyerFichiers, deposerFichierModele } from '../televersement.js';
-import { analyserDemande, analyserTableau, lireNomFichier, normRef, dossierRef } from '../demandePrix.js';
+import { analyserDemande, analyserTableau, lireNomFichier, modelesProches, normRef, cleRef, dossierRef } from '../demandePrix.js';
 
 const ACCEPT_MODELES = 'application/pdf,image/jpeg,image/png,image/webp,image/gif';
 const TYPES_TABLEUR = {
@@ -28,6 +28,7 @@ const TYPES_TABLEUR = {
 };
 const ACCEPT_DEMANDES = ['.pdf', 'application/pdf', ...Object.keys(TYPES_TABLEUR).map((e) => `.${e}`), ...Object.values(TYPES_TABLEUR)].join(',');
 const TYPE_PAR_DEFAUT = 'MUG BLANC';
+const SANS_CLIENT = '__sans_client__'; // valeur du filtre, jamais un nom de client
 const typeTableur = (fichier) => TYPES_TABLEUR[fichier.name.match(/\.(csv|xlsx?)$/i)?.[1].toLowerCase()];
 
 // Lit une demande : texte du PDF, ou 1re feuille Excel / CSV où des lignes sont reconnues.
@@ -63,6 +64,35 @@ async function enregistrerModele({ reference, nom, client, typeMug, fichier }) {
     reference, nom, client, typeMug, fichier: { pathname: chemin, nom: fichier.name.normalize('NFC') }, apercu,
   });
   return modele;
+}
+
+// Refait la vignette d'un modèle à partir de son fichier d'impression déjà en base.
+async function creerApercu(modele) {
+  const reponse = await fetch(urlFichier(modele), { credentials: 'include' });
+  if (!reponse.ok) throw new Error(`fichier illisible (erreur ${reponse.status})`);
+  const fichier = new File([await reponse.blob()], modele.fichierNom || 'modele', { type: modele.fichierType });
+  const { vignette } = await import('../pdf.js');
+  const pathname = await deposerFichierModele(modele.reference, new File([await vignette(fichier)], 'apercu.jpg', { type: 'image/jpeg' }));
+  return (await api.patch(`/modeles/${modele.id}`, { apercu: { pathname } })).modele;
+}
+
+function BoutonApercu({ modele, onCree }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const creer = async () => {
+    setBusy(true);
+    try {
+      onCree(await creerApercu(modele));
+    } catch (err) {
+      toast.error(`${modele.reference} : aperçu impossible, ${err.message}`);
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className="btn btn-secondary btn-xs modele-creer-apercu" onClick={creer} disabled={busy}>
+      {busy ? <LoaderCircle className="spin" /> : <ImagePlus />}{busy ? 'Création…' : 'Créer l’aperçu'}
+    </button>
+  );
 }
 
 // Petit bouton « Ajouter le fichier » (sélecteur de fichier caché).
@@ -125,7 +155,9 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
   const [ajouts, setAjouts] = useState({});
   const [survol, setSurvol] = useState(null);
 
-  const parRef = useMemo(() => new Map(modeles.map((m) => [m.reference, m])), [modeles]);
+  const parCle = useMemo(() => new Map(modeles.map((m) => [cleRef(m.reference), m])), [modeles]);
+  // Le modèle d'une ligne : celui de même référence, ou le modèle proche qu'on a choisi.
+  const modeleDe = (l) => parCle.get(cleRef(l.choix ?? l.reference));
   const clientsConnus = useMemo(
     () => [...new Set([...modeles.map((m) => m.client), analyse?.societe].filter(Boolean))].sort(),
     [modeles, analyse],
@@ -148,7 +180,7 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
         return;
       }
       // Client : celui des modèles retrouvés (ex. HEULA), sinon la société de la demande.
-      const clientsModeles = resultat.lignes.map((l) => parRef.get(l.reference)?.client).filter(Boolean);
+      const clientsModeles = resultat.lignes.map((l) => modeleDe(l)?.client).filter(Boolean);
       const client = clientsModeles.sort((a, b) => clientsModeles.filter((c) => c === b).length - clientsModeles.filter((c) => c === a).length)[0]
         || resultat.societe || '';
       setDemande(fichier);
@@ -162,7 +194,7 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
       setLignes(resultat.lignes.map((l, i) => ({
         ...l,
         cle: `${i}-${l.reference}`,
-        typeMug: parRef.get(l.reference)?.typeMug || (produits.includes(TYPE_PAR_DEFAUT) ? TYPE_PAR_DEFAUT : ''),
+        typeMug: modeleDe(l)?.typeMug || (produits.includes(TYPE_PAR_DEFAUT) ? TYPE_PAR_DEFAUT : ''),
       })));
     } catch (err) {
       toast.error(`Lecture du fichier impossible : ${err.message}`);
@@ -200,22 +232,26 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
     }
   };
   const glisser = (ligne, actif) => (e) => {
-    if (!isAdmin || parRef.get(ligne.reference)?.fichierChemin) return;
+    if (!isAdmin || modeleDe(ligne)?.fichierChemin) return;
     // Passage d'une cellule à l'autre de la même ligne : on reste « au-dessus ».
     if (!actif && e.currentTarget.contains(e.relatedTarget)) return;
     e.preventDefault();
     setSurvol(actif ? ligne.cle : null);
   };
   const deposerSurLigne = (ligne) => (e) => {
-    if (!isAdmin || parRef.get(ligne.reference)?.fichierChemin) return;
+    if (!isAdmin || modeleDe(ligne)?.fichierChemin) return;
     e.preventDefault();
     setSurvol(null);
     const fichier = e.dataTransfer.files?.[0];
     if (fichier && ajouts[ligne.cle] !== 'en-cours') ajouterFichier(ligne, fichier);
   };
 
-  const trouvees = lignes.filter((l) => parRef.get(l.reference)?.fichierChemin);
-  const absentes = lignes.filter((l) => !parRef.get(l.reference)?.fichierChemin);
+  const avecFichier = modeles.filter((m) => m.fichierChemin);
+  const prochesDe = (l) => modelesProches(l.reference, avecFichier);
+  const trouvees = lignes.filter((l) => modeleDe(l)?.fichierChemin);
+  const manquantes = lignes.filter((l) => !modeleDe(l)?.fichierChemin);
+  const aVerifier = manquantes.filter((l) => prochesDe(l).length > 0).length;
+  const absentes = manquantes.length - aVerifier;
   const total = lignes.reduce((s, l) => s + (Number(l.quantite) || 0), 0);
 
   const creer = async () => {
@@ -228,7 +264,7 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
         numero: analyse.numero,
         type: analyse.numero ? analyse.type : null,
         dateSortieTexte: form.dateSortie,
-        lignes: lignes.map(({ reference, designation, quantite, typeMug }) => ({ reference, designation, quantite, typeMug })),
+        lignes: lignes.map(({ reference, choix, designation, quantite, typeMug }) => ({ reference: choix ?? reference, designation, quantite, typeMug })),
       });
       // La demande du client rejoint les documents de la commande. Selon le poste, un CSV
       // arrive sans type ou en texte brut : on lui donne celui que le serveur attend.
@@ -279,9 +315,8 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
           {analyse.societe && <span className="badge">{analyse.societe}</span>}
           <span className="badge">{plural(lignes.length, 'ligne')} · {fmtNumber(total)} mugs</span>
           <span className="badge badge-success"><CircleCheck />{plural(trouvees.length, 'modèle trouvé', 'modèles trouvés')}</span>
-          {absentes.length > 0 && (
-            <span className="badge badge-warning"><TriangleAlert />{absentes.length} absent{absentes.length > 1 ? 's' : ''} de la base</span>
-          )}
+          {aVerifier > 0 && <span className="badge badge-warning"><TriangleAlert />{aVerifier} à vérifier</span>}
+          {absentes > 0 && <span className="badge badge-warning"><TriangleAlert />{absentes} absent{absentes > 1 ? 's' : ''} de la base</span>}
         </div>
 
         <div className="form-grid">
@@ -315,15 +350,20 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
             </thead>
             <tbody>
               {lignes.map((l) => {
-                const m = parRef.get(l.reference);
+                const m = modeleDe(l);
                 const ok = Boolean(m?.fichierChemin);
+                const proches = ok ? [] : prochesDe(l);
                 const enCours = ajouts[l.cle] === 'en-cours';
                 return (
                   <tr key={l.cle} className={`${ok ? '' : 'is-missing'}${survol === l.cle ? ' is-drop' : ''}`}
                       onDragOver={glisser(l, true)} onDragLeave={glisser(l, false)} onDrop={deposerSurLigne(l)}>
                     <td className="col-apercu">
-                      {ok
-                        ? <a href={urlFichier(m)} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier d’impression"><Apercu modele={m} /></a>
+                      {ok || (proches.length > 0 && !enCours && survol !== l.cle)
+                        ? (
+                          <a href={urlFichier(ok ? m : proches[0])} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier d’impression">
+                            <Apercu modele={ok ? m : proches[0]} />
+                          </a>
+                        )
                         : <span className="modele-sans-apercu">{enCours ? <LoaderCircle className="spin" /> : (survol === l.cle ? <Upload /> : <TriangleAlert />)}</span>}
                     </td>
                     <td className="nowrap"><span className="ref">{l.reference}</span></td>
@@ -334,13 +374,30 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
                           <Check size={13} className="text-success" /> {ajouts[l.cle] === 'ok' ? 'Ajouté à la base · ' : ''}{m.fichierNom}
                         </span>
                       )}
-                      {!ok && !isAdmin && (
+                      {ok && l.choix && (
+                        <span className="ligne-ajout">
+                          <span className="cell-sub">Référence de la base : {m.reference}</span>
+                          <button type="button" className="btn btn-ghost btn-xs" onClick={() => majLigne(l.cle, 'choix', undefined)}>Annuler</button>
+                        </span>
+                      )}
+                      {proches.length > 0 && (
+                        <span className="ligne-ajout">
+                          <span className="cell-sub text-warning">Référence différente, s’agit-il de :</span>
+                          {proches.map((p) => (
+                            <button key={p.id} type="button" className="btn btn-secondary btn-xs" onClick={() => majLigne(l.cle, 'choix', p.reference)}>
+                              <Check />{p.reference}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                      {!ok && !isAdmin && proches.length === 0 && (
                         <span className="cell-sub text-warning">Absent de la base : la ligne sera créée sans fichier, à ajouter ensuite</span>
                       )}
                       {!ok && isAdmin && (
                         <span className="ligne-ajout">
                           <span className="cell-sub text-warning">
-                            {survol === l.cle ? 'Lâchez le fichier pour l’ajouter à la base' : 'Absent de la base : glissez son fichier ici, ou'}
+                            {survol === l.cle ? 'Lâchez le fichier pour l’ajouter à la base'
+                              : `${proches.length > 0 ? 'Sinon' : 'Absent de la base'} : glissez son fichier ici, ou`}
                           </span>
                           <BoutonFichier busy={enCours} onFichier={(f) => ajouterFichier(l, f)} />
                         </span>
@@ -382,13 +439,10 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
 
 function ImportModal({ modeles, produits, onClose, onDone }) {
   const toast = useToast();
-  const existants = useMemo(() => new Set(modeles.map((m) => m.reference)), [modeles]);
-  const clientFrequent = useMemo(() => {
-    const n = {};
-    for (const m of modeles) if (m.client) n[m.client] = (n[m.client] || 0) + 1;
-    return Object.entries(n).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-  }, [modeles]);
-  const [client, setClient] = useState(clientFrequent);
+  const existants = useMemo(() => new Map(modeles.map((m) => [cleRef(m.reference), m.reference])), [modeles]);
+  const clientsConnus = useMemo(() => [...new Set(modeles.map((m) => m.client).filter(Boolean))].sort(), [modeles]);
+  // Jamais prérempli : un client choisi d'office finit sur les modèles d'un autre.
+  const [client, setClient] = useState('');
   const [typeMug, setTypeMug] = useState(produits.includes(TYPE_PAR_DEFAUT) ? TYPE_PAR_DEFAUT : '');
   const [fichiers, setFichiers] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -404,16 +458,23 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
   const maj = (id, champs) => setFichiers((fs) => fs.map((f) => (f.id === id ? { ...f, ...champs } : f)));
 
   const refs = fichiers.map((f) => normRef(f.reference));
+  const cles = refs.map(cleRef);
   const aImporter = fichiers.filter((f) => dossierRef(f.reference) && f.etat !== 'ok');
   const etat = (f, i) => {
-    if (f.etat === 'ok') return <span className="text-success nowrap"><CircleCheck size={14} /> Importé</span>;
+    if (f.etat === 'ok') {
+      return f.sansApercu
+        ? <span className="text-warning nowrap"><TriangleAlert size={14} /> Importé sans aperçu</span>
+        : <span className="text-success nowrap"><CircleCheck size={14} /> Importé</span>;
+    }
     if (f.etat === 'en-cours') return <span className="nowrap"><LoaderCircle size={14} className="spin" /> Envoi…</span>;
     if (f.etat === 'erreur') return <span className="text-danger">{f.message}</span>;
     const ref = refs[i];
     if (!ref) return <span className="muted">Pas de référence : ignoré</span>;
     if (!dossierRef(ref)) return <span className="text-danger">Référence sans lettre ni chiffre : ignoré</span>;
-    if (refs.indexOf(ref) !== i) return <span className="text-warning">En double : remplace le précédent</span>;
-    return existants.has(ref) ? <span className="text-warning">Remplace le modèle existant</span> : <span className="muted">Nouveau</span>;
+    if (cles.indexOf(cles[i]) !== i) return <span className="text-warning">En double : remplace le précédent</span>;
+    const existant = existants.get(cles[i]);
+    if (!existant) return <span className="muted">Nouveau</span>;
+    return <span className="text-warning">{existant === ref ? 'Remplace le modèle existant' : `Remplace ${existant}`}</span>;
   };
 
   const importer = async () => {
@@ -424,8 +485,8 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
     for (const f of aImporter) {
       maj(f.id, { etat: 'en-cours', message: '' });
       try {
-        await enregistrerModele({ reference: normRef(f.reference), nom: f.nom, client, typeMug, fichier: f.file });
-        maj(f.id, { etat: 'ok' });
+        const modele = await enregistrerModele({ reference: normRef(f.reference), nom: f.nom, client, typeMug, fichier: f.file });
+        maj(f.id, { etat: 'ok', sansApercu: !modele.apercuChemin });
       } catch (err) {
         erreurs += 1;
         maj(f.id, { etat: 'erreur', message: err.message });
@@ -452,7 +513,7 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
         <>
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>{termine ? 'Fermer' : 'Annuler'}</button>
           {!termine && (
-            <button type="button" className="btn btn-primary" onClick={importer} disabled={busy || aImporter.length === 0}>
+            <button type="button" className="btn btn-primary" onClick={importer} disabled={busy || aImporter.length === 0 || !client.trim()}>
               {busy ? <><LoaderCircle className="spin" />{fait} / {total}…</> : <><Upload />Importer {plural(aImporter.length, 'modèle')}</>}
             </button>
           )}
@@ -472,8 +533,9 @@ function ImportModal({ modeles, produits, onClose, onDone }) {
         {busy && <div className="progress"><div className="progress-bar" style={{ width: `${total ? (fait / total) * 100 : 0}%` }} /></div>}
         <div className="form-grid">
           <label className="field">
-            <span className="field-label">Client</span>
-            <input value={client} placeholder="ex. HEULA" onChange={(e) => setClient(e.target.value)} disabled={busy} />
+            <span className="field-label">Client <span className="req">*</span></span>
+            <input value={client} list="clients-import" placeholder="ex. HEULA" onChange={(e) => setClient(e.target.value)} disabled={busy} />
+            <datalist id="clients-import">{clientsConnus.map((c) => <option key={c} value={c} />)}</datalist>
           </label>
           <label className="field">
             <span className="field-label">Type de mug</span>
@@ -584,6 +646,7 @@ export default function BaseModeles() {
   const [modeles, setModeles] = useState(null);
   const [produits, setProduits] = useState([]);
   const [recherche, setRecherche] = useState('');
+  const [client, setClient] = useState('');
   const [importer, setImporter] = useState(false);
   const [edition, setEdition] = useState(null);
 
@@ -598,11 +661,23 @@ export default function BaseModeles() {
     api.get('/produits').then((d) => setProduits(d.produits.map((p) => p.nom))).catch(() => {});
   }, []);
 
+  // Clients présents dans la base, avec leur nombre de modèles.
+  const clients = useMemo(() => {
+    const n = new Map();
+    for (const m of modeles || []) if (m.client) n.set(m.client, (n.get(m.client) || 0) + 1);
+    return [...n].sort(([a], [b]) => a.localeCompare(b, 'fr'));
+  }, [modeles]);
+  const sansClient = (modeles || []).filter((m) => !m.client).length;
+  // Le client choisi peut disparaître (dernier modèle supprimé) : retour à tous les clients.
+  const clientActif = (client === SANS_CLIENT ? sansClient > 0 : clients.some(([c]) => c === client)) ? client : '';
+
   const filtres = useMemo(() => {
     const q = recherche.trim().toLowerCase();
-    if (!modeles || !q) return modeles || [];
-    return modeles.filter((m) => [m.reference, m.nom, m.client, m.typeMug].some((v) => v?.toLowerCase().includes(q)));
-  }, [modeles, recherche]);
+    const cle = cleRef(recherche);
+    return (modeles || []).filter((m) => (!clientActif || (m.client || SANS_CLIENT) === clientActif) && (!q
+      || [m.reference, m.nom, m.client, m.typeMug].some((v) => v?.toLowerCase().includes(q))
+      || (cle && cleRef(m.reference).includes(cle))));
+  }, [modeles, recherche, clientActif]);
 
   const supprimer = async (m) => {
     const ok = await confirmer({
@@ -634,16 +709,23 @@ export default function BaseModeles() {
           modeles={modeles}
           produits={produits}
           isAdmin={isAdmin}
-          onModeleAjoute={(m) => setModeles((ms) => [...(ms || []).filter((x) => x.reference !== m.reference), m].sort(parReference))}
+          onModeleAjoute={(m) => setModeles((ms) => [...(ms || []).filter((x) => x.id !== m.id), m].sort(parReference))}
         />
       )}
 
       <div className="card">
         <div className="toolbar">
           <SearchInput value={recherche} onChange={setRecherche} placeholder="Rechercher (réf., nom, client…)" />
+          {clients.length + (sansClient > 0 ? 1 : 0) > 1 && (
+            <select className="filtre-client" value={clientActif} onChange={(e) => setClient(e.target.value)} aria-label="Filtrer par client">
+              <option value="">Tous les clients ({fmtNumber(modeles.length)})</option>
+              {clients.map(([nom, n]) => <option key={nom} value={nom}>{nom} ({fmtNumber(n)})</option>)}
+              {sansClient > 0 && <option value={SANS_CLIENT}>Sans client ({fmtNumber(sansClient)})</option>}
+            </select>
+          )}
           <span className="spacer" />
           {modeles && (
-            <span className="toolbar-info"><span><strong>{fmtNumber(filtres.length)}</strong> modèle{filtres.length > 1 ? 's' : ''}{recherche ? ` sur ${fmtNumber(modeles.length)}` : ''}</span></span>
+            <span className="toolbar-info"><span><strong>{fmtNumber(filtres.length)}</strong> modèle{filtres.length > 1 ? 's' : ''}{filtres.length !== modeles.length ? ` sur ${fmtNumber(modeles.length)}` : ''}</span></span>
           )}
         </div>
 
@@ -655,7 +737,7 @@ export default function BaseModeles() {
             action={isAdmin && <button className="btn btn-primary btn-sm" onClick={() => setImporter(true)}><Upload />Importer des modèles</button>}
           />
         ) : filtres.length === 0 ? (
-          <EmptyState icon={<SearchX />} title="Aucun résultat" text={`Aucun modèle ne correspond à « ${recherche} ».`} />
+          <EmptyState icon={<SearchX />} title="Aucun résultat" text={`Aucun modèle ne correspond à « ${recherche} »${clientActif ? ' pour ce client' : ''}.`} />
         ) : (
           <div className="modeles-grid">
             {filtres.map((m) => (
@@ -665,6 +747,9 @@ export default function BaseModeles() {
                   <Apercu modele={m} />
                   <span className="modele-ouvrir"><ExternalLink /></span>
                 </a>
+                {isAdmin && !m.apercuChemin && m.fichierChemin && (
+                  <BoutonApercu modele={m} onCree={(maj) => setModeles((ms) => ms.map((x) => (x.id === maj.id ? maj : x)))} />
+                )}
                 <div className="modele-infos">
                   <span className="ref">{m.reference}</span>
                   <span className="modele-nom" title={m.nom}>{m.nom}</span>

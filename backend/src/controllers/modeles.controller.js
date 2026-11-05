@@ -31,6 +31,11 @@ const nfc = (s) => (s == null ? s : String(s).normalize('NFC'));
 // MUG 488GS01…). On la garde telle quelle, en majuscules et à espaces simples.
 export const normRef = (r) => nfc(String(r ?? '')).trim().toUpperCase().replace(/\s+/g, ' ');
 
+// Clé de comparaison, sans espaces ni ponctuation : une même référence s'écrit « MUG 4198 VT 28 »
+// sur le fichier et « MUG 4198VT28 » sur la demande.
+// ⚠️ Identique à frontend/src/demandePrix.js.
+const cleRef = (r) => normRef(r).normalize('NFD').replace(/\p{M}/gu, '').replace(/[^A-Z0-9]/g, '');
+
 // Dossier de stockage d'une référence, sans espaces ni accents : « MUG 4 125 ETAR »
 // → MUG_4_125_ETAR. Vide si elle n'a ni lettre ni chiffre.
 // ⚠️ Identique à frontend/src/demandePrix.js : le navigateur y dépose les fichiers.
@@ -147,8 +152,11 @@ export async function enregistrer(req, res) {
     if (infosApercu && /^image\//.test(infosApercu.type)) apercuChemin = apercu.pathname;
   }
 
-  const avant = await prisma.modele.findUnique({ where: { reference } });
+  // « MUG 4198VT28 » remplace « MUG 4198 VT 28 » : c'est le même modèle, écrit autrement.
+  const tous = await prisma.modele.findMany();
+  const avant = tous.find((m) => m.reference === reference) ?? tous.find((m) => cleRef(m.reference) === cleRef(reference));
   const data = {
+    reference,
     nom: nfc(cleanStr(req.body.nom)) || avant?.nom || reference,
     client: nfc(cleanStr(req.body.client)) ?? avant?.client ?? null,
     typeMug: cleanStr(req.body.typeMug) ?? avant?.typeMug ?? null,
@@ -158,7 +166,9 @@ export async function enregistrer(req, res) {
     fichierType: infos.type,
     apercuChemin,
   };
-  const modele = await prisma.modele.upsert({ where: { reference }, create: { reference, ...data }, update: data });
+  const modele = avant
+    ? await prisma.modele.update({ where: { id: avant.id }, data })
+    : await prisma.modele.create({ data });
   // Remplacement : les anciens fichiers quittent le stockage.
   for (const ancien of [avant?.fichierChemin, avant?.apercuChemin]) {
     if (ancien && ancien !== modele.fichierChemin && ancien !== modele.apercuChemin) await deleteByKey(ancien);
@@ -172,7 +182,17 @@ export async function update(req, res) {
   if (req.body?.nom !== undefined) data.nom = cleanStr(req.body.nom) || m.reference;
   if (req.body?.client !== undefined) data.client = cleanStr(req.body.client);
   if (req.body?.typeMug !== undefined) data.typeMug = cleanStr(req.body.typeMug);
-  res.json({ modele: await prisma.modele.update({ where: { id: m.id }, data }) });
+  // Vignette refaite dans le navigateur, à partir du fichier d'impression déjà en base.
+  const apercu = req.body?.apercu?.pathname;
+  if (apercu !== undefined) {
+    if (!cheminValide(apercu, prefixeModele(m.reference))) throw httpError(400, 'Vignette invalide.');
+    const infos = await infosFichier(apercu).catch(() => null);
+    if (!infos || !/^image\//.test(infos.type)) throw httpError(400, 'Vignette illisible.');
+    data.apercuChemin = apercu;
+  }
+  const modele = await prisma.modele.update({ where: { id: m.id }, data });
+  if (data.apercuChemin && m.apercuChemin && m.apercuChemin !== data.apercuChemin) await deleteByKey(m.apercuChemin);
+  res.json({ modele });
 }
 
 export async function remove(req, res) {
@@ -193,11 +213,11 @@ export async function creerCommande(req, res) {
   if (!cleanStr(req.body.client)) throw httpError(400, 'Indiquez le client.');
 
   const refs = demande.map((l) => normRef(l.reference));
-  const modeles = await prisma.modele.findMany({ where: { reference: { in: refs.filter(Boolean) } } });
-  const parRef = new Map(modeles.map((m) => [m.reference, m]));
+  const parCle = new Map((await prisma.modele.findMany()).map((m) => [cleRef(m.reference), m]));
+  const modeleDe = (reference) => parCle.get(cleRef(reference));
 
   const lignes = demande.map((l, i) => {
-    const m = parRef.get(refs[i]);
+    const m = modeleDe(refs[i]);
     return {
       typeMug: cleanStr(l.typeMug) ?? m?.typeMug ?? null,
       visuel: m ? libelleModele(m) : [refs[i], cleanStr(l.designation)].filter(Boolean).join(' ') || 'Visuel à préciser',
@@ -217,7 +237,7 @@ export async function creerCommande(req, res) {
 
   let copies = 0;
   for (const ligne of creee.lignes) {
-    const m = parRef.get(refs[ligne.ordre]);
+    const m = modeleDe(refs[ligne.ordre]);
     if (!m?.fichierChemin) continue;
     const nomStockage = makeFilename(m.fichierNom || `${m.reference}.pdf`);
     try {
@@ -245,6 +265,6 @@ export async function creerCommande(req, res) {
   res.status(201).json({
     commande: masquerMarge(await commandesService.getCommande(commande.id), req.user.role),
     fichiers: copies,
-    manquants: refs.filter((r) => !parRef.get(r)?.fichierChemin),
+    manquants: refs.filter((r) => !modeleDe(r)?.fichierChemin),
   });
 }
