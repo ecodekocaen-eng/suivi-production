@@ -21,15 +21,15 @@ const QUANTITE_MAX = 2000;
 const LES_DEUX = 'LES_DEUX';
 // Visuel déjà dans la file, dans Edge Print ou imprimé : il n'est pas recoché d'office.
 const DEJA_PARTI = ['EN_FILE', 'ENVOYE', 'IMPRIME'];
-// On propose la dizaine supérieure pour garder du stock (36 → 40), sauf sur une
-// commande nominative : plus de 2 visuels, en majorité à 1 ou 2 mugs chacun. Sur
-// 1 ou 2 visuels, on arrondit toujours ; chacun peut y être accompagné de sa maquette.
+// Commande nominative : plus de 2 visuels, en majorité à 1 ou 2 mugs chacun. Sur 1 ou
+// 2 visuels, jamais, et chacun peut y être accompagné de sa maquette. Partout ailleurs,
+// on propose la dizaine supérieure pour garder du stock (36 → 40).
 const VISUELS_SOLO = 2;
 const MUGS_NOMINATIF = 2;
-function aArrondir(groupes) {
+function estNominative(groupes) {
   const solo = groupes.length <= VISUELS_SOLO && groupes.every((g) => g.fichiers.length <= VISUELS_SOLO);
-  const nominatives = groupes.filter((g) => g.quantite <= MUGS_NOMINATIF * g.fichiers.length);
-  return solo || nominatives.length * 2 <= groupes.length;
+  const petites = groupes.filter((g) => g.quantite <= MUGS_NOMINATIF * g.fichiers.length);
+  return !solo && petites.length * 2 > groupes.length;
 }
 const dizaineSuperieure = (n) => Math.ceil(n / 10) * 10;
 const surLa = (code) => `sur la ${IMPRIMANTE_NUMEROS[code]}`;
@@ -61,7 +61,8 @@ function groupesDe(commande) {
       type: commande.typeMug, quantite: commande.quantite, fichiers: sansLigne,
     });
   }
-  return groupes;
+  // Nominative : un visuel en plusieurs exemplaires passe en haut, pour ne pas se perdre.
+  return estNominative(groupes) ? groupes.sort((a, b) => (b.quantite || 0) - (a.quantite || 0)) : groupes;
 }
 
 export default function ImpressionModal({ commandes, apercus, onClose, onSent }) {
@@ -87,7 +88,7 @@ export default function ImpressionModal({ commandes, apercus, onClose, onSent })
   const [choix, setChoix] = useState(() => {
     const init = {};
     for (const b of blocs) {
-      const arrondir = aArrondir(b.groupes);
+      const arrondir = !estNominative(b.groupes);
       for (const g of b.groupes) {
         const mugs = Math.max(1, g.quantite || 1);
         const quantite = String(arrondir && g.quantite ? dizaineSuperieure(mugs) : mugs);
@@ -126,7 +127,10 @@ export default function ImpressionModal({ commandes, apercus, onClose, onSent })
     if (!deux) setImprimante(valeur);
   };
 
-  const coches = Object.entries(choix).filter(([, v]) => v.coche);
+  // Dans l'ordre de la liste : c'est aussi l'ordre d'arrivée dans Edge Print.
+  const coches = blocs.flatMap((b) => b.groupes.flatMap((g) => g.fichiers))
+    .map((f) => [f.id, choix[f.id]])
+    .filter(([, v]) => v.coche);
   // Une part vide ou à 0 : rien sur cette imprimante.
   const elements = coches.flatMap(([id, v]) => (repartir
     ? IMPRIMANTES.map((code) => ({ fichierId: Number(id), quantite: Number(v.parts[code]), imprimante: code }))
@@ -210,7 +214,7 @@ export default function ImpressionModal({ commandes, apercus, onClose, onSent })
           {blocs.length > 1 && (
             <div className="imp-commande-titre"><span className="ref">{commande.reference}</span>{commande.client}</div>
           )}
-          {aArrondir(groupes) && groupes.some((g) => g.quantite % 10 !== 0) && (
+          {!estNominative(groupes) && groupes.some((g) => g.quantite % 10 !== 0) && (
             <p className="field-hint"><Info />Quantités arrondies à la dizaine supérieure pour garder du stock.</p>
           )}
           {groupes.map((g) => {

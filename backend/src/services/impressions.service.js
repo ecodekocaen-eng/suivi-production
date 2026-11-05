@@ -271,7 +271,8 @@ export async function battement({ poste, version, imprimantes } = {}) {
 export async function travauxPourAgent() {
   const envois = await prisma.impression.findMany({
     where: { statut: { in: STATUTS_ACTIFS } },
-    orderBy: { createdAt: 'asc' },
+    // Un lot est créé d'un coup : l'identifiant garde l'ordre de la liste d'envoi.
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: 200,
     include: { commande: { select: { reference: true, client: true } } },
   });
