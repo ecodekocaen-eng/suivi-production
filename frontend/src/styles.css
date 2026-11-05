@@ -1090,7 +1090,16 @@ body.has-modal { overflow: hidden; }
 .imp-qte { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); }
 .imp-erreur { margin: 1rem 0 0; }
 .imp-note { margin: 1rem 0 0; }
-.imp-visuel { max-width: 320px; overflow-wrap: anywhere; font-size: .88rem; }
+.imp-envoyee { display: flex; align-items: center; gap: .35rem; }
+.imp-deplier { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.imp-deplier svg { width: 16px; height: 16px; }
+.imp-avancement { display: flex; align-items: center; gap: .45rem; margin-top: .3rem; font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.imp-jauge { width: 84px; height: 5px; flex: none; border-radius: 3px; background: var(--border); overflow: hidden; }
+.imp-jauge > i { display: block; height: 100%; background: var(--success); }
+.imp-detail td { background: var(--surface-2); padding: .35rem 1rem .5rem 2.75rem; }
+.imp-envoi { display: flex; align-items: center; gap: .3rem .75rem; padding: .25rem 0; flex-wrap: wrap; font-size: .85rem; }
+.imp-envoi-nom { flex: 1; min-width: 180px; overflow-wrap: anywhere; }
+.imp-envoi.is-annule .imp-envoi-nom { color: var(--muted); }
 .imp-message { color: var(--danger); max-width: 260px; }
 .imp-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: .25rem; flex-wrap: wrap; }
 

@@ -47,6 +47,18 @@ export function ImpressionBadge({ impression }) {
   );
 }
 
+// Pastille d'une commande dans « Envois récents » : son état et sa ou ses imprimantes.
+export function EtatCommande({ statut, imprimantes }) {
+  const Icone = ICONES[statut] || Hourglass;
+  const numeros = imprimantes.map((code) => IMPRIMANTE_NUMEROS[code] ?? code).join(' et ');
+  return (
+    <span className={`badge ${IMPRESSION_CLASS[statut] || ''}`}>
+      <Icone />{IMPRESSION_LABELS[statut] || statut}
+      {statut !== 'ANNULE' && ` · Imp. ${numeros}`}
+    </span>
+  );
+}
+
 // État du PC atelier : en ligne, hors ligne (depuis…), ou agent pas encore installé.
 export function PosteStatut({ poste }) {
   if (!poste) return null;

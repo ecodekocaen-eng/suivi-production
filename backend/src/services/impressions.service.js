@@ -14,8 +14,14 @@ const QUANTITE_MAX = 2000;
 const VISUELS_MAX = 200;
 // Sans nouvelles de l'agent depuis ce délai, le PC atelier est affiché hors ligne.
 const DELAI_EN_LIGNE_MS = 90 * 1000;
+// Commandes affichées dans « Envois récents ».
+const COMMANDES_RECENTES = 30;
 // Envois que l'agent doit encore déposer (EN_FILE) ou surveiller (ENVOYE).
 const STATUTS_ACTIFS = ['EN_FILE', 'ENVOYE'];
+// Envois pas encore aboutis : on peut les annuler ou les marquer imprimés.
+const STATUTS_OUVERTS = [...STATUTS_ACTIFS, 'ERREUR'];
+// État affiché pour une commande : ce qui demande le plus d'attention d'abord.
+const PRIORITE_ETATS = ['ERREUR', 'EN_FILE', 'ENVOYE', 'IMPRIME', 'ANNULE'];
 // États que l'agent peut signaler, selon l'état courant. Un envoi annulé
 // ou déjà imprimé n'est jamais écrasé.
 const TRANSITIONS_AGENT = {
@@ -127,8 +133,66 @@ export async function etatPoste() {
   };
 }
 
+// Envoi en erreur refait depuis, par un envoi plus récent du même visuel. Un envoi
+// du même lot n'est pas une reprise : c'est l'autre part d'un visuel réparti.
+const estRefait = (envoi, envois) => envoi.statut === 'ERREUR' && envois.some((e) => e.fichierId === envoi.fichierId
+  && e.lot !== envoi.lot && e.id > envoi.id && e.statut !== 'ANNULE');
+
+// Envois qui font l'état d'une commande (du plus récent au plus ancien) : ni annulés,
+// ni en erreur puis refaits. Si tout est annulé : le dernier lot.
+function envoisQuiComptent(envois) {
+  const vivants = envois.filter((e) => e.statut !== 'ANNULE' && !estRefait(e, envois));
+  return vivants.length ? vivants : envois.filter((e) => e.lot === envois[0].lot);
+}
+
+// Ce qu'on peut relancer d'un coup : les erreurs, ou tout le dernier lot s'il a été annulé.
+function envoisARelancer(envois) {
+  const comptent = envoisQuiComptent(envois);
+  return comptent.every((e) => e.statut === 'ANNULE') ? comptent : comptent.filter((e) => e.statut === 'ERREUR');
+}
+
+// Une ligne de « Envois récents » : une commande, ses envois et leur résumé.
+function resumeCommande(envois) {
+  const comptent = envoisQuiComptent(envois);
+  const visuels = new Map(); // visuel → tous ses envois sont imprimés ?
+  for (const e of comptent) {
+    const cle = e.fichierId ?? e.fichierNom;
+    visuels.set(cle, (visuels.get(cle) ?? true) && e.statut === 'IMPRIME');
+  }
+  return {
+    id: envois[0].commandeId,
+    commande: envois[0].commande,
+    createdAt: comptent[0].createdAt,
+    creeParNom: comptent[0].creeParNom,
+    statut: PRIORITE_ETATS.find((s) => comptent.some((e) => e.statut === s)),
+    imprimantes: [...new Set(comptent.map((e) => e.imprimante))].sort(),
+    visuels: visuels.size,
+    visuelsImprimes: [...visuels.values()].filter(Boolean).length,
+    transferts: comptent.reduce((s, e) => s + e.quantite, 0),
+    ouverts: comptent.filter((e) => STATUTS_OUVERTS.includes(e.statut)).length,
+    aRelancer: envoisARelancer(envois).length,
+    envois,
+  };
+}
+
+// Les dernières commandes envoyées, avec tous leurs envois.
+async function envoisRecents() {
+  const recentes = await prisma.impression.groupBy({
+    by: ['commandeId'],
+    _max: { createdAt: true },
+    orderBy: { _max: { createdAt: 'desc' } },
+    take: COMMANDES_RECENTES,
+  });
+  const envois = await prisma.impression.findMany({
+    where: { commandeId: { in: recentes.map((r) => r.commandeId) } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    include: { commande: { select: { id: true, reference: true, client: true } } },
+  });
+  return recentes.map((r) => resumeCommande(envois.filter((e) => e.commandeId === r.commandeId)));
+}
+
 // Page « Impression » : commandes en attente qui ont des visuels, derniers
-// envois, état du PC atelier.
+// envois regroupés par commande, état du PC atelier.
 export async function fileImpression() {
   const [aImprimer, envois, poste] = await Promise.all([
     prisma.commande.findMany({
@@ -150,11 +214,7 @@ export async function fileImpression() {
         },
       },
     }),
-    prisma.impression.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 60,
-      include: { commande: { select: { id: true, reference: true, client: true } } },
-    }),
+    envoisRecents(),
     etatPoste(),
   ]);
   // Vignettes déjà prêtes (visuels de la base de données). Sans elles, le navigateur
@@ -167,26 +227,15 @@ export async function fileImpression() {
 }
 
 // Envoi qui retient sa ligne : encore en file ou dans Edge Print, ou en erreur
-// sans avoir été refait depuis. Un envoi d'un même lot n'est pas une reprise :
-// c'est l'autre part d'un visuel réparti sur les deux imprimantes.
-function retientSaLigne(envoi, envois) {
-  if (STATUTS_ACTIFS.includes(envoi.statut)) return true;
-  return envoi.statut === 'ERREUR' && !envois.some((e) => e.fichierId === envoi.fichierId
-    && e.lot !== envoi.lot && e.id > envoi.id && e.statut !== 'ANNULE');
-}
+// sans avoir été refait depuis.
+const retientSaLigne = (envoi, envois) => STATUTS_ACTIFS.includes(envoi.statut)
+  || (envoi.statut === 'ERREUR' && !estRefait(envoi, envois));
 
-// Après chaque visuel imprimé : historique, puis passage de la commande en
-// « Impression OK » si toutes ses lignes (hors accessoires) ont été imprimées.
-async function apresImpression(envoi, userId) {
-  await addLog({
-    action: LOG_ACTIONS.IMPRESSION_TERMINEE,
-    detail: `Imprimé : « ${envoi.fichierNom} » × ${envoi.quantite} (${nomImprimante(envoi.imprimante)})`,
-    userId,
-    commandeId: envoi.commandeId,
-  });
-
+// Passage de la commande en « Impression OK » si toutes ses lignes (hors accessoires)
+// ont été imprimées.
+async function verifierCommande(commandeId, userId) {
   const commande = await prisma.commande.findUnique({
-    where: { id: envoi.commandeId },
+    where: { id: commandeId },
     include: {
       lignes: { select: { id: true, typeMug: true } },
       fichiers: { where: { categorie: 'VISUEL' }, select: { ligneId: true } },
@@ -208,6 +257,17 @@ async function apresImpression(envoi, userId) {
     ? aImprimer.every((l) => imprimees.has(l.id) && !retenues.has(l.id))
     : imprimees.size > 0 && retenues.size === 0;
   if (complete) await updateCommande(commande.id, { statut: 'Impression OK' }, userId);
+}
+
+// Après chaque visuel imprimé : historique, puis contrôle de la commande.
+async function apresImpression(envoi, userId) {
+  await addLog({
+    action: LOG_ACTIONS.IMPRESSION_TERMINEE,
+    detail: `Imprimé : « ${envoi.fichierNom} » × ${envoi.quantite} (${nomImprimante(envoi.imprimante)})`,
+    userId,
+    commandeId: envoi.commandeId,
+  });
+  await verifierCommande(envoi.commandeId, userId);
 }
 
 // Annulation par un utilisateur. Si le visuel est déjà dans Edge Print,
@@ -253,6 +313,74 @@ export async function marquerImprime(id, user) {
   });
   await apresImpression(maj, user.id);
   return maj;
+}
+
+// ── Actions sur toute une commande (« Envois récents ») ──────
+// Une seule ligne d'historique, et le rythme d'un seul appel, même pour 45 visuels.
+
+async function envoisDeCommande(commandeId) {
+  const envois = await prisma.impression.findMany({
+    where: { commandeId: Number(commandeId) },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  });
+  if (envois.length === 0) throw httpError(404, 'Aucun envoi pour cette commande.');
+  return envois;
+}
+
+const ouvertsDe = (envois) => envoisQuiComptent(envois).filter((e) => STATUTS_OUVERTS.includes(e.statut));
+
+export async function annulerCommande(commandeId, user) {
+  const envois = await envoisDeCommande(commandeId);
+  const cibles = ouvertsDe(envois);
+  if (cibles.length === 0) throw httpError(400, 'Plus rien à annuler sur cette commande.');
+  await prisma.impression.updateMany({
+    where: { id: { in: cibles.map((e) => e.id) } },
+    data: { statut: 'ANNULE', message: texteCourt(`Annulé par ${user.nom}`) },
+  });
+  await addLog({
+    action: LOG_ACTIONS.IMPRESSION_ANNULEE,
+    detail: `Impression annulée : ${pluriel(cibles.length, 'envoi')}`,
+    userId: user.id,
+    commandeId: cibles[0].commandeId,
+  });
+  return cibles.length;
+}
+
+export async function marquerCommandeImprimee(commandeId, user) {
+  const envois = await envoisDeCommande(commandeId);
+  const cibles = ouvertsDe(envois);
+  if (cibles.length === 0) throw httpError(400, 'Plus rien à marquer imprimé sur cette commande.');
+  await prisma.impression.updateMany({
+    where: { id: { in: cibles.map((e) => e.id) } },
+    data: { statut: 'IMPRIME', imprimeAt: new Date(), message: texteCourt(`Marqué imprimé par ${user.nom}`) },
+  });
+  await addLog({
+    action: LOG_ACTIONS.IMPRESSION_TERMINEE,
+    detail: `Marqué imprimé à la main : ${pluriel(cibles.length, 'envoi')}`,
+    userId: user.id,
+    commandeId: cibles[0].commandeId,
+  });
+  await verifierCommande(cibles[0].commandeId, user.id);
+  return cibles.length;
+}
+
+// Relance en un seul lot : les transferts à l'unité repartent regroupés en rangées.
+export async function relancerCommande(commandeId, user) {
+  const envois = await envoisDeCommande(commandeId);
+  const cibles = envoisARelancer(envois);
+  if (cibles.length === 0) throw httpError(400, 'Rien à relancer sur cette commande.');
+  const parties = [...new Map(cibles.map((e) => [`${e.fichierId}-${e.imprimante}`, e])).values()];
+  const fichiers = await prisma.fichier.findMany({
+    where: { id: { in: parties.map((e) => e.fichierId).filter(Boolean) } },
+    select: { id: true },
+  });
+  const existants = new Set(fichiers.map((f) => f.id));
+  const elements = parties.filter((e) => existants.has(e.fichierId))
+    .reverse() // retrouve l'ordre de l'envoi d'origine
+    .map((e) => ({ fichierId: e.fichierId, quantite: e.quantite, imprimante: e.imprimante }));
+  if (elements.length === 0) throw httpError(400, 'Les visuels n’existent plus : renvoyez-les depuis la commande.');
+  const nouveaux = await creerEnvoi({ elements }, user);
+  return nouveaux.length;
 }
 
 // ── Agent d'impression (PC atelier) ──────────────────────────

@@ -16,5 +16,8 @@ router.post('/', asyncHandler(c.create));
 router.post('/:id/annuler', asyncHandler(c.annuler));
 router.post('/:id/relancer', asyncHandler(c.relancer));
 router.post('/:id/imprime', asyncHandler(c.imprime));
+router.post('/commandes/:commandeId/annuler', asyncHandler(c.annulerCommande));
+router.post('/commandes/:commandeId/relancer', asyncHandler(c.relancerCommande));
+router.post('/commandes/:commandeId/imprime', asyncHandler(c.imprimeCommande));
 
 export default router;

@@ -1,22 +1,114 @@
 // ─────────────────────────────────────────────────────────────
 //  Page « Impression » : commandes en attente à envoyer au PC atelier
-//  (une ou plusieurs à la fois), suivi des envois et état de l'agent
-//  d'impression (Edge Print). La page se met à jour toute seule.
+//  (une ou plusieurs à la fois), suivi des envois par commande et état de
+//  l'agent d'impression (Edge Print). La page se met à jour toute seule.
 // ─────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Printer, Inbox, RefreshCw, X, Ban, RotateCcw, CheckCheck, Info, TriangleAlert, LoaderCircle } from 'lucide-react';
+import { Printer, Inbox, RefreshCw, X, Ban, RotateCcw, CheckCheck, ChevronDown, ChevronRight, Info, TriangleAlert, LoaderCircle } from 'lucide-react';
 import { api } from '../api.js';
 import { fmtDate, fmtDateTime, fmtNumber, fmtRelative, plural } from '../format.js';
 import { Loading, EmptyState, PageHeader, usePageTitle } from '../ui/bits.jsx';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import { Echeance } from '../components/Statut.jsx';
 import ImpressionModal from '../components/ImpressionModal.jsx';
-import { ImpressionBadge, PosteStatut } from '../components/ImpressionEtat.jsx';
+import { EtatCommande, ImpressionBadge, PosteStatut } from '../components/ImpressionEtat.jsx';
 
 const ACTUALISATION_MS = 10000;
 // Envois « partis » (file, Edge Print, imprimé) : la commande est déjà envoyée.
 const PARTIS = ['EN_FILE', 'ENVOYE', 'IMPRIME'];
+
+// Une commande dans « Envois récents » : son résumé, avec ses actions d'ensemble, puis
+// une fois dépliée le détail de ses envois, avec leurs actions une par une.
+function CommandeEnvoyee({ groupe, ouverte, occupe, enCours, onBasculer, onAgir, onAgirCommande }) {
+  const { commande, envois } = groupe;
+  const avancement = groupe.visuels > 1 && groupe.statut !== 'ANNULE';
+  return (
+    <>
+      <tr className={`is-clickable${groupe.statut === 'ANNULE' ? ' is-muted' : ''}`} onClick={onBasculer}>
+        <td>
+          <span className="imp-envoyee">
+            <button type="button" className="imp-deplier" aria-expanded={ouverte}
+                    aria-label={`${ouverte ? 'Replier' : 'Déplier'} les envois de ${commande.reference}`}>
+              {ouverte ? <ChevronDown /> : <ChevronRight />}
+            </button>
+            <span>
+              <Link className="ref" to={`/commandes/${commande.id}`} onClick={(e) => e.stopPropagation()}>{commande.reference}</Link>
+              <span className="cell-sub">{commande.client}</span>
+            </span>
+          </span>
+        </td>
+        <td className="nowrap" title={fmtDateTime(groupe.createdAt)}>
+          <span className="cell-main">{fmtRelative(groupe.createdAt)}</span>
+          {groupe.creeParNom && <span className="cell-sub">{groupe.creeParNom}</span>}
+        </td>
+        <td className="num tnum">{fmtNumber(groupe.visuels)}</td>
+        <td className="num tnum">{fmtNumber(groupe.transferts)}</td>
+        <td>
+          <EtatCommande statut={groupe.statut} imprimantes={groupe.imprimantes} />
+          {avancement && (
+            <span className="imp-avancement">
+              <span className="imp-jauge"><i style={{ width: `${(groupe.visuelsImprimes / groupe.visuels) * 100}%` }} /></span>
+              {groupe.visuelsImprimes} / {groupe.visuels} imprimés
+            </span>
+          )}
+        </td>
+        <td className="num" onClick={(e) => e.stopPropagation()}>
+          <span className="imp-actions">
+            {enCours === `commande-${groupe.id}` && <LoaderCircle className="spin" size={16} />}
+            {groupe.aRelancer > 0 && (
+              <button className="btn btn-secondary btn-sm" onClick={() => onAgirCommande(groupe, 'relancer')} disabled={occupe}>
+                <RotateCcw />Tout relancer
+              </button>
+            )}
+            {groupe.ouverts > 0 && (
+              <>
+                <button className="btn btn-secondary btn-sm" onClick={() => onAgirCommande(groupe, 'imprime')} disabled={occupe}
+                        title="L’impression est faite mais n’a pas été détectée">
+                  <CheckCheck />Tout imprimé
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => onAgirCommande(groupe, 'annuler')} disabled={occupe}>
+                  <Ban />Tout annuler
+                </button>
+              </>
+            )}
+          </span>
+        </td>
+      </tr>
+      {ouverte && (
+        <tr className="imp-detail">
+          <td colSpan={6}>
+            {envois.map((e) => (
+              <div className={`imp-envoi${e.statut === 'ANNULE' ? ' is-annule' : ''}`} key={e.id}>
+                <span className="imp-envoi-nom">{e.fichierNom} · × {fmtNumber(e.quantite)}</span>
+                <ImpressionBadge impression={e} />
+                {e.statut === 'ERREUR' && e.message && <span className="cell-sub imp-message">{e.message}</span>}
+                <span className="imp-actions">
+                  {enCours === e.id && <LoaderCircle className="spin" size={16} />}
+                  {['ERREUR', 'ANNULE'].includes(e.statut) && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => onAgir(e, 'relancer')} disabled={occupe}>
+                      <RotateCcw />Relancer
+                    </button>
+                  )}
+                  {['EN_FILE', 'ENVOYE', 'ERREUR'].includes(e.statut) && (
+                    <>
+                      <button className="btn btn-ghost btn-sm" onClick={() => onAgir(e, 'imprime')} disabled={occupe}
+                              title="L’impression est faite mais n’a pas été détectée">
+                        <CheckCheck />Imprimé
+                      </button>
+                      <button className="btn btn-ghost btn-sm btn-icon" onClick={() => onAgir(e, 'annuler')} disabled={occupe}
+                              title="Annuler l’envoi" aria-label={`Annuler l’envoi de ${e.fichierNom}`}><Ban /></button>
+                    </>
+                  )}
+                </span>
+              </div>
+            ))}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
 
 export default function Impression() {
   usePageTitle('Impression');
@@ -26,7 +118,8 @@ export default function Impression() {
   const [erreur, setErreur] = useState(null);
   const [selection, setSelection] = useState(() => new Set());
   const [aEnvoyer, setAEnvoyer] = useState(null); // commandes ouvertes dans la fenêtre d'envoi
-  const [enCours, setEnCours] = useState(null); // envoi dont une action est en cours
+  const [enCours, setEnCours] = useState(null); // envoi ou commande dont une action est en cours
+  const [ouvertes, setOuvertes] = useState(() => new Set()); // commandes dépliées dans « Envois récents »
 
   const load = useCallback(async () => {
     try {
@@ -93,6 +186,54 @@ export default function Impression() {
         annuler: 'Envoi annulé',
         relancer: 'Envoi relancé : il repart dans la file',
         imprime: 'Envoi marqué imprimé',
+      }[action]);
+      await load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setEnCours(null);
+    }
+  };
+
+  const basculer = (id) => setOuvertes((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  // Action sur tous les envois d'une commande : toujours confirmée.
+  const agirCommande = async (groupe, action) => {
+    const { reference } = groupe.commande;
+    const n = action === 'relancer' ? groupe.aRelancer : groupe.ouverts;
+    const nombre = plural(n, 'envoi');
+    const ok = await confirmer({
+      imprime: {
+        title: `Tout marquer imprimé sur ${reference} ?`,
+        message: `${nombre} ${n > 1 ? 'seront marqués imprimés' : 'sera marqué imprimé'}. À utiliser si l’impression est faite mais n’a pas été détectée, par exemple après une coupure de réseau.`,
+        confirmLabel: 'Tout marquer imprimé',
+        icon: <CheckCheck />,
+      },
+      annuler: {
+        title: `Tout annuler sur ${reference} ?`,
+        message: `${nombre} ${n > 1 ? 'seront annulés' : 'sera annulé'}. Ce qui est déjà dans Edge Print y reste : supprimez aussi ces travaux dans Edge Print pour qu’ils ne soient pas imprimés.`,
+        confirmLabel: 'Tout annuler',
+        tone: 'danger',
+      },
+      relancer: {
+        title: `Tout relancer sur ${reference} ?`,
+        message: `${nombre} ${n > 1 ? 'repartiront dans la file et arriveront' : 'repartira dans la file et arrivera'} de nouveau dans Edge Print.`,
+        confirmLabel: 'Tout relancer',
+        icon: <RotateCcw />,
+      },
+    }[action]);
+    if (!ok) return;
+    setEnCours(`commande-${groupe.id}`);
+    try {
+      await api.post(`/impressions/commandes/${groupe.id}/${action}`);
+      toast.success({
+        annuler: 'Envois annulés',
+        relancer: 'Envois relancés : ils repartent dans la file',
+        imprime: 'Envois marqués imprimés',
       }[action]);
       await load();
     } catch (err) {
@@ -207,52 +348,18 @@ export default function Impression() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Envoyé</th>
                     <th>Commande</th>
-                    <th>Visuel</th>
+                    <th>Envoyé</th>
+                    <th className="num">Visuels</th>
                     <th className="num">Transferts</th>
                     <th>État</th>
                     <th className="num">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {envois.map((e) => (
-                    <tr key={e.id} className={e.statut === 'ANNULE' ? 'is-muted' : ''}>
-                      <td className="nowrap" title={fmtDateTime(e.createdAt)}>
-                        <span className="cell-main">{fmtRelative(e.createdAt)}</span>
-                        {e.creeParNom && <span className="cell-sub">{e.creeParNom}</span>}
-                      </td>
-                      <td>
-                        <Link className="ref" to={`/commandes/${e.commande.id}`}>{e.commande.reference}</Link>
-                        <span className="cell-sub">{e.commande.client}</span>
-                      </td>
-                      <td className="imp-visuel">{e.fichierNom}</td>
-                      <td className="num tnum">{fmtNumber(e.quantite)}</td>
-                      <td>
-                        <ImpressionBadge impression={e} />
-                        {e.statut === 'ERREUR' && e.message && <span className="cell-sub imp-message">{e.message}</span>}
-                      </td>
-                      <td className="num">
-                        <span className="imp-actions">
-                          {enCours === e.id && <LoaderCircle className="spin" size={16} />}
-                          {['ERREUR', 'ANNULE'].includes(e.statut) && (
-                            <button className="btn btn-ghost btn-sm" onClick={() => agir(e, 'relancer')} disabled={enCours != null}>
-                              <RotateCcw />Relancer
-                            </button>
-                          )}
-                          {['EN_FILE', 'ENVOYE', 'ERREUR'].includes(e.statut) && (
-                            <>
-                              <button className="btn btn-ghost btn-sm" onClick={() => agir(e, 'imprime')} disabled={enCours != null}
-                                      title="L’impression est faite mais n’a pas été détectée">
-                                <CheckCheck />Imprimé
-                              </button>
-                              <button className="btn btn-ghost btn-sm btn-icon" onClick={() => agir(e, 'annuler')} disabled={enCours != null}
-                                      title="Annuler l’envoi" aria-label="Annuler l’envoi"><Ban /></button>
-                            </>
-                          )}
-                        </span>
-                      </td>
-                    </tr>
+                  {envois.map((g) => (
+                    <CommandeEnvoyee key={g.id} groupe={g} ouverte={ouvertes.has(g.id)} occupe={enCours != null} enCours={enCours}
+                                     onBasculer={() => basculer(g.id)} onAgir={agir} onAgirCommande={agirCommande} />
                   ))}
                 </tbody>
               </table>

@@ -32,6 +32,19 @@ export async function imprime(req, res) {
   res.json({ impression: await service.marquerImprime(req.params.id, req.user) });
 }
 
+// Actions sur toute une commande : renvoient le nombre d'envois concernés.
+export async function annulerCommande(req, res) {
+  res.json({ envois: await service.annulerCommande(req.params.commandeId, req.user) });
+}
+
+export async function relancerCommande(req, res) {
+  res.status(201).json({ envois: await service.relancerCommande(req.params.commandeId, req.user) });
+}
+
+export async function imprimeCommande(req, res) {
+  res.json({ envois: await service.marquerCommandeImprimee(req.params.commandeId, req.user) });
+}
+
 // ── Agent d'impression (jeton dédié) ─────────────────────────
 
 // Signe de vie + travaux à déposer ou à surveiller, en un seul appel.
