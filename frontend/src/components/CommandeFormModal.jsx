@@ -16,6 +16,8 @@ import ChampsCommande, { ChampNotes, JOURS_OUVRES_SORTIE } from './ChampsCommand
 import LignesEditor, { ligneVide, totauxLignes } from './LignesEditor.jsx';
 import { envoyerFichiers, verifierTailles } from '../televersement.js';
 
+const ENVOIS_SIMULTANES = 4;
+
 // Convertit une date ISO en valeur pour <input type="date"> (yyyy-mm-dd).
 const toDateInput = (iso) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 
@@ -124,26 +126,40 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
 
     const { commande: creee } = await api.post('/commandes', { ...form, lignes: payloadLignes });
 
-    // Upload des visuels sur leur ligne respective (créées dans le même ordre).
-    // La commande existe déjà : en cas d'échec d'envoi, on ne la recrée pas.
-    try {
-      const creees = creee.lignes || [];
-      const total = utiles.filter((l) => l.files.length).length;
-      let n = 0;
-      for (let i = 0; i < utiles.length; i += 1) {
-        if (utiles[i].files.length && creees[i]) {
-          n += 1;
-          const ligne = n;
+    // Upload des visuels sur leur ligne respective (créées dans le même ordre), à
+    // plusieurs à la fois. La commande existe déjà : un envoi en échec n'arrête pas
+    // les autres, et sa ligne reste signalée sans visuel dans le tableau.
+    const creees = creee.lignes || [];
+    const envois = utiles.map((l, i) => ({ files: l.files, ligne: creees[i] })).filter((e) => e.files.length && e.ligne);
+    const avancement = envois.map(() => 0);
+    const echecs = [];
+    let termines = 0;
+    let suivant = 0;
+    const afficher = () => setProgress({
+      ligne: termines, total: envois.length, percent: Math.round(avancement.reduce((s, p) => s + p, 0) / envois.length),
+    });
+    const envoyerLaSuite = async () => {
+      while (suivant < envois.length) {
+        const n = suivant;
+        suivant += 1;
+        try {
           await envoyerFichiers({
             commandeId: creee.id,
-            ligneId: creees[i].id,
-            files: utiles[i].files,
-            onProgress: (percent) => setProgress({ ligne, total, percent }),
+            ligneId: envois[n].ligne.id,
+            files: envois[n].files,
+            onProgress: (percent) => { avancement[n] = percent; afficher(); },
           });
+        } catch (err) {
+          echecs.push(err.message);
         }
+        avancement[n] = 100;
+        termines += 1;
+        afficher();
       }
-    } catch (err) {
-      toast.error(`Commande ${creee.reference} créée, mais l’envoi des visuels a échoué : ${err.message}. Ajoutez-les depuis la fiche.`);
+    };
+    await Promise.all(Array.from({ length: ENVOIS_SIMULTANES }, envoyerLaSuite));
+    if (echecs.length > 0) {
+      toast.error(`Commande ${creee.reference} créée, mais ${echecs.length} envoi${echecs.length > 1 ? 's ont' : ' a'} échoué : ${echecs[0]}. Ajoutez ces visuels depuis la fiche.`);
     }
     onSaved(creee);
   };
