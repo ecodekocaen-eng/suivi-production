@@ -19,9 +19,11 @@ import { fileURLToPath } from 'node:url';
 import { decouper, deposer } from './depot.js';
 import { lireTravauxAgent, estImprime, finImpression } from './edgeprint.js';
 
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 // Numéro affiché dans l'outil de suivi ; les codes A et B servent à la configuration.
 const NUMEROS = { A: 1, B: 2 };
+// « fetch failed » ne dit rien : on y ajoute la cause réseau (DNS, délai dépassé, coupure…).
+const motif = (err) => [err.message, err.cause?.code ?? err.cause?.message].filter(Boolean).join(' : ');
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const UNE_FOIS = args.includes('--une-fois');
@@ -165,7 +167,7 @@ async function deposerEnvoi(cfg, journal, t) {
     const n = (echecsTelechargement.get(t.id) || 0) + 1;
     echecsTelechargement.set(t.id, n);
     if (n >= ESSAIS_MAX) return erreur(cfg, t, `Téléchargement impossible : ${err.message}`);
-    log(`Envoi #${t.id} : téléchargement à réessayer (${n}/${ESSAIS_MAX}) : ${err.message}`);
+    log(`Envoi #${t.id} : téléchargement à réessayer (${n}/${ESSAIS_MAX}) : ${motif(err)}`);
     return undefined;
   }
   echecsTelechargement.delete(t.id);
@@ -232,7 +234,7 @@ async function tour(cfg) {
     try {
       await deposerEnvoi(cfg, journal, t);
     } catch (err) {
-      log(`Envoi #${t.id} : ${err.message}`);
+      log(`Envoi #${t.id} : ${motif(err)}`);
     }
   }
   // Base d'Edge Print : lue seulement si un envoi attend, et pas à chaque passage.
@@ -267,7 +269,7 @@ async function main() {
       await tour(cfg);
       await attendre(cfg.intervalleSecondes * 1000);
     } catch (err) {
-      log(`Erreur : ${err.message} (nouvel essai dans 1 min)`);
+      log(`Erreur : ${motif(err)} (nouvel essai dans 1 min)`);
       await attendre(PAUSE_ERREUR_MS);
     }
   }

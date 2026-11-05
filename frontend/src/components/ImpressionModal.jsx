@@ -6,7 +6,7 @@
 //  Impression (plusieurs).
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react';
-import { Printer, Send, FileText, Image as ImageIcon, LoaderCircle, TriangleAlert, Info } from 'lucide-react';
+import { Printer, Send, LoaderCircle, TriangleAlert, Info } from 'lucide-react';
 import Modal from '../ui/Modal.jsx';
 import { Segmented, useStoredState } from '../ui/bits.jsx';
 import { useToast } from '../ui/feedback.jsx';
@@ -14,18 +14,23 @@ import { api } from '../api.js';
 import { fmtNumber, plural } from '../format.js';
 import { IMPRIMANTES, IMPRIMANTE_NUMEROS } from '../constants.js';
 import { ImpressionBadge, PosteStatut, libelleImprimante, derniersEnvoisPar } from './ImpressionEtat.jsx';
+import ApercuVisuel from './ApercuVisuel.jsx';
 
 const QUANTITE_MAX = 2000;
 // Choix « Les deux » : chaque visuel se répartit entre les deux imprimantes.
 const LES_DEUX = 'LES_DEUX';
 // Visuel déjà dans la file, dans Edge Print ou imprimé : il n'est pas recoché d'office.
 const DEJA_PARTI = ['EN_FILE', 'ENVOYE', 'IMPRIME'];
-// Commande à 1 ou 2 visuels (pas nominative) : on propose la dizaine supérieure,
-// pour garder du stock (36 → 40). Un visuel peut être accompagné de sa maquette,
-// d'où 2 fichiers par ligne au maximum.
-const VISUELS_ARRONDIS = 2;
-const aArrondir = (groupes) => groupes.length <= VISUELS_ARRONDIS
-  && groupes.every((g) => g.fichiers.length <= VISUELS_ARRONDIS);
+// On propose la dizaine supérieure pour garder du stock (36 → 40), sauf sur une
+// commande nominative : plus de 2 visuels, en majorité à 1 ou 2 mugs chacun. Sur
+// 1 ou 2 visuels, on arrondit toujours ; chacun peut y être accompagné de sa maquette.
+const VISUELS_SOLO = 2;
+const MUGS_NOMINATIF = 2;
+function aArrondir(groupes) {
+  const solo = groupes.length <= VISUELS_SOLO && groupes.every((g) => g.fichiers.length <= VISUELS_SOLO);
+  const nominatives = groupes.filter((g) => g.quantite <= MUGS_NOMINATIF * g.fichiers.length);
+  return solo || nominatives.length * 2 <= groupes.length;
+}
 const dizaineSuperieure = (n) => Math.ceil(n / 10) * 10;
 const surLa = (code) => `sur la ${IMPRIMANTE_NUMEROS[code]}`;
 
@@ -59,7 +64,7 @@ function groupesDe(commande) {
   return groupes;
 }
 
-export default function ImpressionModal({ commandes, onClose, onSent }) {
+export default function ImpressionModal({ commandes, apercus, onClose, onSent }) {
   const toast = useToast();
   const [poste, setPoste] = useState(null);
   const [imprimante, setImprimante] = useStoredState('impression-imprimante', 'A');
@@ -78,7 +83,7 @@ export default function ImpressionModal({ commandes, onClose, onSent }) {
   );
 
   // Coché d'office : le seul visuel d'une ligne, s'il n'est pas déjà parti.
-  // Quantité proposée : le nombre de mugs de la ligne, arrondi s'il y a 1 ou 2 visuels.
+  // Quantité proposée : le nombre de mugs de la ligne, arrondi sauf pour le nominatif.
   const [choix, setChoix] = useState(() => {
     const init = {};
     for (const b of blocs) {
@@ -205,53 +210,68 @@ export default function ImpressionModal({ commandes, onClose, onSent }) {
           {blocs.length > 1 && (
             <div className="imp-commande-titre"><span className="ref">{commande.reference}</span>{commande.client}</div>
           )}
-          {groupes.map((g) => (
-            <div className="imp-groupe" key={g.cle}>
-              <div className="imp-groupe-titre">
-                <span className="cell-main">{g.titre}</span>
-                <span className="cell-sub">{[g.type, g.quantite ? plural(g.quantite, 'mug') : null].filter(Boolean).join(' · ')}</span>
+          {aArrondir(groupes) && groupes.some((g) => g.quantite % 10 !== 0) && (
+            <p className="field-hint"><Info />Quantités arrondies à la dizaine supérieure pour garder du stock.</p>
+          )}
+          {groupes.map((g) => {
+            const infos = [g.type, g.quantite ? plural(g.quantite, 'mug') : null].filter(Boolean);
+            // Une ligne à un seul visuel tient sur une rangée ; à plusieurs, on la titre pour choisir.
+            const seul = g.fichiers.length === 1;
+            return (
+              <div className={`imp-groupe${seul ? ' is-seul' : ''}`} key={g.cle}>
+                {!seul && (
+                  <>
+                    <div className="imp-groupe-titre">
+                      <span className="cell-main">{g.titre}</span>
+                      <span className="cell-sub">{infos.join(' · ')}</span>
+                    </div>
+                    <p className="field-hint"><Info />Plusieurs visuels sur cette ligne : cochez celui (ou ceux) à imprimer.</p>
+                  </>
+                )}
+                {g.fichiers.map((f) => {
+                  const c = choix[f.id];
+                  const envois = derniersEnvois.get(f.id) || [];
+                  const idCase = `imp-fichier-${f.id}`;
+                  // Le nom de la ligne, s'il ne se lit pas déjà dans celui du fichier.
+                  const nomLigne = f.nom.toLowerCase().includes(g.titre.toLowerCase()) ? [] : [g.titre];
+                  return (
+                    <div className={`imp-fichier${c.coche ? ' is-checked' : ''}`} key={f.id}>
+                      <input type="checkbox" id={idCase} checked={c.coche} onChange={(e) => cocher(f.id, e.target.checked)} />
+                      <a className="imp-apercu" href={`/api/commandes/${commande.id}/fichiers/${f.id}/view`}
+                         target="_blank" rel="noopener noreferrer" title={`Ouvrir ${f.nom}`}>
+                        <ApercuVisuel commandeId={commande.id} fichier={f} apercu={apercus?.[f.id]} />
+                      </a>
+                      <label htmlFor={idCase}>
+                        {f.nom}
+                        {seul && <span className="cell-sub">{[...nomLigne, ...infos].join(' · ')}</span>}
+                      </label>
+                      {envois.map((i) => <ImpressionBadge impression={i} key={i.id} />)}
+                      {repartir ? (
+                        <>
+                          {IMPRIMANTES.map((code) => (
+                            <span className="imp-qte" key={code}>
+                              {libelleImprimante(poste, code)}
+                              <input type="number" min="0" max={QUANTITE_MAX} inputMode="numeric" className="input-qte"
+                                     value={c.parts[code]} onChange={(e) => part(f.id, code, e.target.value)}
+                                     aria-label={`Nombre de transferts pour ${f.nom} ${surLa(code)}`} />
+                            </span>
+                          ))}
+                          <span className="imp-qte">= {fmtNumber(totalParts(c.parts))}</span>
+                        </>
+                      ) : (
+                        <span className="imp-qte">
+                          <input type="number" min="1" max={QUANTITE_MAX} inputMode="numeric" className="input-qte"
+                                 value={c.quantite} onChange={(e) => quantite(f.id, e.target.value)}
+                                 aria-label={`Nombre de transferts pour ${f.nom}`} />
+                          transferts
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              {g.fichiers.length > 1 && (
-                <p className="field-hint"><Info />Plusieurs visuels sur cette ligne : cochez celui (ou ceux) à imprimer.</p>
-              )}
-              {aArrondir(groupes) && g.quantite % 10 !== 0 && (
-                <p className="field-hint"><Info />Quantité arrondie à la dizaine supérieure pour garder du stock.</p>
-              )}
-              {g.fichiers.map((f) => {
-                const c = choix[f.id];
-                const envois = derniersEnvois.get(f.id) || [];
-                const Icone = f.type?.startsWith('image/') ? ImageIcon : FileText;
-                const idCase = `imp-fichier-${f.id}`;
-                return (
-                  <div className={`imp-fichier${c.coche ? ' is-checked' : ''}`} key={f.id}>
-                    <input type="checkbox" id={idCase} checked={c.coche} onChange={(e) => cocher(f.id, e.target.checked)} />
-                    <label htmlFor={idCase}><Icone />{f.nom}</label>
-                    {envois.map((i) => <ImpressionBadge impression={i} key={i.id} />)}
-                    {repartir ? (
-                      <>
-                        {IMPRIMANTES.map((code) => (
-                          <span className="imp-qte" key={code}>
-                            {libelleImprimante(poste, code)}
-                            <input type="number" min="0" max={QUANTITE_MAX} inputMode="numeric" className="input-qte"
-                                   value={c.parts[code]} onChange={(e) => part(f.id, code, e.target.value)}
-                                   aria-label={`Nombre de transferts pour ${f.nom} ${surLa(code)}`} />
-                          </span>
-                        ))}
-                        <span className="imp-qte">= {fmtNumber(totalParts(c.parts))}</span>
-                      </>
-                    ) : (
-                      <span className="imp-qte">
-                        <input type="number" min="1" max={QUANTITE_MAX} inputMode="numeric" className="input-qte"
-                               value={c.quantite} onChange={(e) => quantite(f.id, e.target.value)}
-                               aria-label={`Nombre de transferts pour ${f.nom}`} />
-                        transferts
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+            );
+          })}
         </div>
       ))}
 

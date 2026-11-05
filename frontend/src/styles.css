@@ -1077,14 +1077,16 @@ body.has-modal { overflow: hidden; }
 .imp-commande-titre { display: flex; align-items: center; gap: .6rem; font-weight: 650; margin-bottom: .5rem; }
 .imp-groupe { border: 1px solid var(--border); border-radius: 12px; padding: .7rem .85rem; }
 .imp-groupe + .imp-groupe { margin-top: .6rem; }
+.imp-groupe.is-seul { border: 0; border-radius: 0; padding: 0; }
+.imp-groupe.is-seul + .imp-groupe.is-seul { margin-top: .35rem; }
+.imp-apercu { flex: none; width: 104px; display: block; cursor: zoom-in; }
 .imp-groupe-titre { display: flex; align-items: baseline; justify-content: space-between; gap: .25rem .75rem; flex-wrap: wrap; margin-bottom: .35rem; }
 .imp-groupe-titre .cell-sub { margin-top: 0; }
-.imp-groupe .field-hint { display: flex; align-items: center; gap: .35rem; margin: 0 0 .35rem; }
-.imp-groupe .field-hint svg { width: 14px; height: 14px; }
+.imp-commande .field-hint { display: flex; align-items: center; gap: .35rem; margin: 0 0 .35rem; }
+.imp-commande .field-hint svg { width: 14px; height: 14px; }
 .imp-fichier { display: flex; align-items: center; gap: .5rem .65rem; padding: .4rem .5rem; border-radius: 8px; flex-wrap: wrap; }
 .imp-fichier.is-checked { background: var(--brand-50); }
-.imp-fichier label { flex: 1; min-width: 160px; display: flex; align-items: center; gap: .45rem; font-size: .9rem; cursor: pointer; overflow-wrap: anywhere; }
-.imp-fichier label svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.imp-fichier label { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: .1rem; font-size: .9rem; cursor: pointer; overflow-wrap: anywhere; }
 .imp-qte { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); }
 .imp-erreur { margin: 1rem 0 0; }
 .imp-note { margin: 1rem 0 0; }
@@ -1127,6 +1129,7 @@ body.has-modal { overflow: hidden; }
 }
 @media (max-width: 600px) {
   body { font-size: 14.5px; }
+  .imp-apercu { width: 84px; }
   .pipeline { grid-template-columns: repeat(5, 132px); gap: .5rem; scrollbar-width: none; margin-left: -.85rem; margin-right: -.85rem; padding: 0 .85rem .25rem; }
   .pipeline::-webkit-scrollbar { display: none; }
   .pipe { padding: .65rem .75rem; gap: .35rem; }

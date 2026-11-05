@@ -56,7 +56,7 @@ export default function Impression() {
   }
   if (!data) return <Loading label="Chargement de la file d’impression…" />;
 
-  const { aImprimer, envois, poste } = data;
+  const { aImprimer, envois, poste, apercus } = data;
   const choisies = aImprimer.filter((c) => selection.has(c.id));
   const toutesCochees = aImprimer.length > 0 && choisies.length === aImprimer.length;
   const toggle = (id) => setSelection((s) => {
@@ -279,6 +279,7 @@ export default function Impression() {
       {aEnvoyer && (
         <ImpressionModal
           commandes={aEnvoyer}
+          apercus={apercus}
           onClose={() => setAEnvoyer(null)}
           onSent={() => { setSelection(new Set()); load(); }}
         />

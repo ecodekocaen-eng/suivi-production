@@ -496,6 +496,7 @@ export default function CommandeDetail() {
       {impression && (
         <ImpressionModal
           commandes={[{ ...commande, impressions }]}
+          apercus={apercus}
           onClose={() => setImpression(false)}
           onSent={load}
         />

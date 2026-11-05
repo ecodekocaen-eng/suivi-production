@@ -6,7 +6,7 @@
 import crypto from 'node:crypto';
 import { prisma } from '../prisma.js';
 import { addLog } from './log.service.js';
-import { updateCommande, typesNonComptes } from './commandes.service.js';
+import { updateCommande, typesNonComptes, apercusDesModeles } from './commandes.service.js';
 import { LOG_ACTIONS, IMPRIMANTES, IMPRIMANTE_NUMEROS } from '../constants.js';
 
 // Bornes d'un envoi.
@@ -142,7 +142,7 @@ export async function fileImpression() {
         fichiers: {
           where: { categorie: 'VISUEL' },
           orderBy: { createdAt: 'asc' },
-          select: { id: true, nom: true, type: true, taille: true, ligneId: true },
+          select: { id: true, nom: true, type: true, taille: true, categorie: true, ligneId: true },
         },
         impressions: {
           orderBy: { createdAt: 'desc' },
@@ -157,7 +157,13 @@ export async function fileImpression() {
     }),
     etatPoste(),
   ]);
-  return { aImprimer, envois, poste };
+  // Vignettes déjà prêtes (visuels de la base de données). Sans elles, le navigateur
+  // rend le PDF : un souci ici ne doit pas priver l'atelier de sa file d'impression.
+  const apercus = await apercusDesModeles(aImprimer.flatMap((c) => c.fichiers)).catch((err) => {
+    console.error('Aperçus des modèles :', err.message);
+    return {};
+  });
+  return { aImprimer, envois, poste, apercus };
 }
 
 // Envoi qui retient sa ligne : encore en file ou dans Edge Print, ou en erreur
