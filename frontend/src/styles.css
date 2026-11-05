@@ -614,6 +614,7 @@ input:disabled, select:disabled, textarea:disabled { background: var(--surface-3
   position: relative; width: 100%; max-width: 560px; margin: auto 0; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; animation: pop-in .18s var(--ease);
 }
+.modal:focus-visible { outline: none; }
 .modal-sm { max-width: 440px; }
 .modal-lg { max-width: 860px; }
 .modal-xl { max-width: 1040px; }
