@@ -225,14 +225,16 @@ export async function creerCommande(req, res) {
       commentaire: m?.fichierChemin ? null : 'Modèle absent de la base de données : fichier à ajouter',
     };
   });
-  const data = buildData({
-    client: req.body.client,
-    nom: req.body.nom,
-    dateSortieTexte: req.body.dateSortieTexte,
-    dateCommande: new Date().toISOString(),
-    notes: req.body.notes,
-  });
-  const commande = await commandesService.createCommande(data, req.user.id, buildLignes({ lignes }));
+  // Mêmes champs qu'une commande saisie à la main.
+  const data = buildData({ ...req.body, dateCommande: req.body.dateCommande || new Date().toISOString() });
+  if (req.user.role !== 'ADMIN') delete data.prixVente; // écriture réservée ADMIN
+  let commande;
+  try {
+    commande = await commandesService.createCommande(data, req.user.id, buildLignes({ lignes }));
+  } catch (err) {
+    if (err.code === 'P2002') throw httpError(409, 'Cette référence existe déjà.');
+    throw err;
+  }
   const creee = await commandesService.getCommande(commande.id);
 
   let copies = 0;

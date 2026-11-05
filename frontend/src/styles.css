@@ -518,6 +518,11 @@ input:disabled, select:disabled, textarea:disabled { background: var(--surface-3
 
 /* ── Lu / non lu ─────────────────────────────────────────── */
 .ref-cell { display: flex; align-items: center; gap: .3rem; }
+.alerte-manque {
+  display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; margin-left: .15rem; border-radius: 6px;
+  background: var(--warning-bg); color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning-bd);
+}
+.alerte-manque svg { width: 14px; height: 14px; }
 /* Pastille : pleine = non lue, cercle = lue. C'est aussi un bouton de bascule. */
 .lu-dot {
   appearance: none; border: 0; background: none; padding: 0; margin: -4px 0 -4px -6px;

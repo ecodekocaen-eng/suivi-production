@@ -7,27 +7,24 @@
 //  - Fermer une saisie en cours demande confirmation (pas de perte par erreur)
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ClipboardList, CalendarDays, Euro, Layers, StickyNote, Truck, LoaderCircle, Flame, RotateCcw } from 'lucide-react';
+import { ClipboardList, Layers, Truck, LoaderCircle } from 'lucide-react';
 import { api } from '../api.js';
-import { useAuth } from '../auth.jsx';
-import { STATUTS, STATUT_LABELS, ATELIERS } from '../constants.js';
 import { addJoursOuvres, aujourdhuiISO, fmtNumber } from '../format.js';
 import Modal from '../ui/Modal.jsx';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
+import ChampsCommande, { ChampNotes, JOURS_OUVRES_SORTIE } from './ChampsCommande.jsx';
 import LignesEditor, { ligneVide, totauxLignes } from './LignesEditor.jsx';
 import { envoyerFichiers, verifierTailles } from '../televersement.js';
 
 // Convertit une date ISO en valeur pour <input type="date"> (yyyy-mm-dd).
 const toDateInput = (iso) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 
-const PRIX_ESAT = [{ v: '0.2', label: '0,20 €' }, { v: '0.3', label: '0,30 €' }];
-
 function formInitial(commande) {
   if (!commande) {
     const jour = aujourdhuiISO();
     return {
       reference: '', client: '', nom: '', statut: 'En attente',
-      dateCommande: jour, dateSortieTexte: addJoursOuvres(jour, 10),
+      dateCommande: jour, dateSortieTexte: addJoursOuvres(jour, JOURS_OUVRES_SORTIE),
       prixEsat: '', prixVente: '', atelier: '', notes: '',
     };
   }
@@ -67,14 +64,11 @@ const empreinte = (form, lignes) => JSON.stringify({
 
 export default function CommandeFormModal({ commande = null, onClose, onSaved }) {
   const edition = !!commande;
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
   const toast = useToast();
   const confirmer = useConfirm();
 
   const [form, setForm] = useState(() => formInitial(commande));
   const [lignes, setLignes] = useState(() => lignesInitiales(commande));
-  const [clients, setClients] = useState([]);
   const [produits, setProduits] = useState([]);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -82,7 +76,6 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
   const depart = useRef(empreinte(formInitial(commande), lignesInitiales(commande)));
 
   useEffect(() => {
-    api.get('/clients/names').then((d) => setClients(d.clients)).catch(() => {});
     api.get('/produits').then((d) => setProduits(d.produits)).catch(() => {});
     // Préremplit la référence avec la prochaine valeur de la séquence (modifiable).
     if (!edition) {
@@ -97,15 +90,6 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
   const modifie = empreinte(form, lignes) !== depart.current;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  // Date de commande → date de sortie automatique (+10 jours ouvrés), à la création.
-  const onDateCommande = (e) => {
-    const v = e.target.value;
-    setForm((f) => ({ ...f, dateCommande: v, dateSortieTexte: !edition && v ? addJoursOuvres(v, 10) : f.dateSortieTexte }));
-  };
-
-  const togglePrix = (v) => setForm((f) => ({ ...f, prixEsat: f.prixEsat === v ? '' : v }));
-  const prixAutre = form.prixEsat && !PRIX_ESAT.some((p) => Number(p.v) === Number(form.prixEsat));
 
   const fermer = async () => {
     if (busy) return;
@@ -213,93 +197,7 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
     >
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
-      <section className="form-section">
-        <h3 className="form-section-title"><ClipboardList />Commande</h3>
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">Client <span className="req">*</span></span>
-            <input list="clients-suggest" value={form.client} onChange={set('client')}
-                   placeholder="Tapez les premières lettres…" autoComplete="off" required data-autofocus />
-            <datalist id="clients-suggest">
-              {clients.map((c) => <option key={c} value={c} />)}
-            </datalist>
-          </label>
-          <label className="field">
-            <span className="field-label">Nom de la commande</span>
-            <input value={form.nom} onChange={set('nom')} placeholder="ex : Réassort été, Congrès 2026…" />
-          </label>
-          {!edition && (
-            <label className="field">
-              <span className="field-label">Référence <span className="req">*</span></span>
-              <input value={form.reference} onChange={set('reference')} required className="mono" />
-              <span className="field-hint">Numérotée automatiquement — modifiable</span>
-            </label>
-          )}
-          {!edition && (
-            <label className="field">
-              <span className="field-label">Statut de départ</span>
-              <select value={form.statut} onChange={set('statut')}>
-                {STATUTS.map((s) => <option key={s} value={s}>{STATUT_LABELS[s]}</option>)}
-              </select>
-            </label>
-          )}
-          <label className="field">
-            <span className="field-label">Atelier</span>
-            <input list="ateliers-suggest" value={form.atelier} onChange={set('atelier')} placeholder="LETTRAGE…" />
-            <datalist id="ateliers-suggest">
-              {ATELIERS.map((a) => <option key={a} value={a} />)}
-            </datalist>
-          </label>
-        </div>
-      </section>
-
-      <section className="form-section">
-        <h3 className="form-section-title"><CalendarDays />Planning et prix</h3>
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">Date de commande</span>
-            <input type="date" value={form.dateCommande} onChange={onDateCommande} />
-          </label>
-          <div className="field">
-            <label className="field-label" htmlFor="sortie">Date de sortie</label>
-            <input id="sortie" value={form.dateSortieTexte} onChange={set('dateSortieTexte')} placeholder="JJ/MM/AAAA, ASAP…" />
-            <span className="row">
-              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setForm((f) => ({ ...f, dateSortieTexte: 'ASAP' }))}>
-                <Flame />ASAP
-              </button>
-              {form.dateCommande && (
-                <button type="button" className="btn btn-ghost btn-xs"
-                        onClick={() => setForm((f) => ({ ...f, dateSortieTexte: addJoursOuvres(f.dateCommande, 10) }))}>
-                  <RotateCcw />+10 jours ouvrés
-                </button>
-              )}
-            </span>
-          </div>
-          <div className="field">
-            <span className="field-label"><Euro size={14} />Prix ESAT (par mug)</span>
-            <div className="choice-group">
-              {PRIX_ESAT.map((p) => (
-                <button key={p.v} type="button" className={`choice${Number(form.prixEsat) === Number(p.v) && form.prixEsat !== '' ? ' is-active' : ''}`}
-                        aria-pressed={Number(form.prixEsat) === Number(p.v) && form.prixEsat !== ''} onClick={() => togglePrix(p.v)}>
-                  {p.label}
-                </button>
-              ))}
-              {prixAutre && (
-                <button type="button" className="choice is-active" aria-pressed="true" onClick={() => togglePrix(form.prixEsat)}
-                        title="Prix existant — cliquer pour le retirer">
-                  {Number(form.prixEsat).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
-                </button>
-              )}
-            </div>
-          </div>
-          {isAdmin && (
-            <label className="field">
-              <span className="field-label">Prix de vente (€ / mug) <span className="admin-tag">admin</span></span>
-              <input value={form.prixVente} onChange={set('prixVente')} placeholder="2,50" inputMode="decimal" />
-            </label>
-          )}
-        </div>
-      </section>
+      <ChampsCommande form={form} setForm={setForm} edition={edition} />
 
       {edition && (
         <section className="form-section">
@@ -326,10 +224,7 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
         <LignesEditor lignes={lignes} onChange={setLignes} produits={produits} allowFiles={!edition} />
       </section>
 
-      <section className="form-section">
-        <h3 className="form-section-title"><StickyNote />Notes</h3>
-        <textarea rows="3" value={form.notes} onChange={set('notes')} placeholder="Informations utiles pour l'atelier…" />
-      </section>
+      <ChampNotes form={form} setForm={setForm} />
     </Modal>
   );
 }

@@ -3,7 +3,7 @@
 //  Statut modifiable sur place ; un clic sur la ligne ouvre la fiche.
 // ─────────────────────────────────────────────────────────────
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, Paperclip, Package, CalendarClock, Mail, MailOpen } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, Paperclip, Package, CalendarClock, Mail, MailOpen, TriangleAlert } from 'lucide-react';
 import { StatutSelect, Echeance } from './Statut.jsx';
 import Thumb, { imageProduit } from './Thumb.jsx';
 import { fmtDate, fmtNumber, echeance } from '../format.js';
@@ -53,6 +53,13 @@ function BoutonLecture({ commande, onChange }) {
   );
 }
 
+// Triangle d'alerte : il manque un visuel ou une information sur cette commande.
+function AlerteManques({ commande }) {
+  if (!commande.manques?.length) return null;
+  const texte = `À compléter : ${commande.manques.join(', ')}`;
+  return <span className="alerte-manque" role="img" title={texte} aria-label={texte}><TriangleAlert /></span>;
+}
+
 export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, sortDir, onSort, onStatutChange, onLectureChange, compact = false }) {
   const navigate = useNavigate();
   const ouvrir = (c) => navigate(`/commandes/${c.id}`);
@@ -92,6 +99,7 @@ export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, s
                       <Link to={`/commandes/${c.id}`} className="ref ref-link" onClick={(e) => e.stopPropagation()}>
                         {c.reference}
                       </Link>
+                      <AlerteManques commande={c} />
                     </div>
                   </td>
                   <td className="col-client">
@@ -149,6 +157,7 @@ export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, s
                 <span className="ref">
                   <PastilleLecture commande={c} onChange={onLectureChange} />
                   {c.reference}
+                  <AlerteManques commande={c} />
                 </span>
                 <span onClick={(e) => e.stopPropagation()}>
                   <StatutSelect value={c.statut} onChange={(s) => onStatutChange(c, s)} disabled={c.supprime} />

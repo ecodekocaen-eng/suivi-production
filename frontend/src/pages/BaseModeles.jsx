@@ -9,14 +9,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Database, FileSearch, FileText, TriangleAlert, CircleCheck, Pencil, Trash, Upload, LoaderCircle,
-  ExternalLink, X, RotateCcw, SearchX, PackagePlus, ArrowRight, Check, ImagePlus,
+  ExternalLink, X, RotateCcw, SearchX, PackagePlus, ArrowRight, Check, ImagePlus, Layers,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { plural, fmtNumber, fmtSize } from '../format.js';
+import { addJoursOuvres, aujourdhuiISO, plural, fmtNumber, fmtSize } from '../format.js';
 import { PageHeader, EmptyState, Loading, SearchInput, usePageTitle } from '../ui/bits.jsx';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import Modal from '../ui/Modal.jsx';
+import ChampsCommande, { ChampNotes, JOURS_OUVRES_SORTIE } from '../components/ChampsCommande.jsx';
 import { envoyerFichiers, deposerFichierModele } from '../televersement.js';
 import { analyserDemande, analyserTableau, lireNomFichier, modelesProches, normRef, cleRef, dossierRef } from '../demandePrix.js';
 
@@ -148,7 +149,7 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
   const [demande, setDemande] = useState(null); // le fichier du client
   const [lecture, setLecture] = useState(false);
   const [analyse, setAnalyse] = useState(null);
-  const [form, setForm] = useState({ client: '', nom: '', dateSortie: '' });
+  const [form, setForm] = useState(null);
   const [lignes, setLignes] = useState([]);
   const [busy, setBusy] = useState(false);
   // Visuels manquants ajoutés depuis la demande : { [cle de ligne]: 'en-cours' | 'ok' }.
@@ -186,11 +187,23 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
       setDemande(fichier);
       setAnalyse(resultat);
       setAjouts({});
+      // Mêmes valeurs de départ qu'une commande saisie à la main.
+      const jour = aujourdhuiISO();
       setForm({
+        reference: '',
         client,
         nom: resultat.numero ? `${resultat.type} ${resultat.numero}` : fichier.name.replace(/\.[a-z0-9]+$/i, ''),
-        dateSortie: resultat.dateExpedition || '',
+        statut: 'En attente',
+        atelier: '',
+        dateCommande: jour,
+        dateSortieTexte: resultat.dateExpedition || addJoursOuvres(jour, JOURS_OUVRES_SORTIE),
+        prixEsat: '',
+        prixVente: '',
+        notes: '',
       });
+      api.get('/commandes/next-reference')
+        .then((d) => setForm((f) => (f ? { ...f, reference: f.reference || d.reference } : f)))
+        .catch(() => {});
       setLignes(resultat.lignes.map((l, i) => ({
         ...l,
         cle: `${i}-${l.reference}`,
@@ -259,11 +272,9 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
     setBusy(true);
     try {
       const { commande, fichiers } = await api.post('/modeles/commande', {
-        client: form.client,
-        nom: form.nom,
+        ...form,
         numero: analyse.numero,
         type: analyse.numero ? analyse.type : null,
-        dateSortieTexte: form.dateSortie,
         lignes: lignes.map(({ reference, choix, designation, quantite, typeMug }) => ({ reference: choix ?? reference, designation, quantite, typeMug })),
       });
       // La demande du client rejoint les documents de la commande. Selon le poste, un CSV
@@ -317,112 +328,103 @@ function AnalyseDemande({ modeles, produits, isAdmin, onModeleAjoute }) {
           <span className="badge badge-success"><CircleCheck />{plural(trouvees.length, 'modèle trouvé', 'modèles trouvés')}</span>
           {aVerifier > 0 && <span className="badge badge-warning"><TriangleAlert />{aVerifier} à vérifier</span>}
           {absentes > 0 && <span className="badge badge-warning"><TriangleAlert />{absentes} absent{absentes > 1 ? 's' : ''} de la base</span>}
+          {analyse.dateExpedition && <span className="badge">Expédition demandée : {analyse.dateExpedition}</span>}
         </div>
 
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">Client <span className="req">*</span></span>
-            <input value={form.client} list="clients-connus" onChange={(e) => setForm((f) => ({ ...f, client: e.target.value }))} />
-            <datalist id="clients-connus">{clientsConnus.map((c) => <option key={c} value={c} />)}</datalist>
-          </label>
-          <label className="field">
-            <span className="field-label">Nom de la commande</span>
-            <input value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} />
-          </label>
-          <label className="field">
-            <span className="field-label">Date de sortie</span>
-            <input value={form.dateSortie} placeholder="jj/mm/aaaa ou ASAP" onChange={(e) => setForm((f) => ({ ...f, dateSortie: e.target.value }))} />
-            {analyse.dateExpedition && <span className="field-hint">Expédition demandée par le client : {analyse.dateExpedition}</span>}
-          </label>
-        </div>
+        <ChampsCommande form={form} setForm={setForm} suggestions={clientsConnus} />
 
-        <div className="table-wrap">
-          <table className="table demande-table">
-            <thead>
-              <tr>
-                <th className="col-apercu" aria-label="Aperçu" />
-                <th>Réf.</th>
-                <th>Modèle</th>
-                <th>Type de mug</th>
-                <th className="num">Qté</th>
-                <th aria-label="Retirer" />
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((l) => {
-                const m = modeleDe(l);
-                const ok = Boolean(m?.fichierChemin);
-                const proches = ok ? [] : prochesDe(l);
-                const enCours = ajouts[l.cle] === 'en-cours';
-                return (
-                  <tr key={l.cle} className={`${ok ? '' : 'is-missing'}${survol === l.cle ? ' is-drop' : ''}`}
-                      onDragOver={glisser(l, true)} onDragLeave={glisser(l, false)} onDrop={deposerSurLigne(l)}>
-                    <td className="col-apercu">
-                      {ok || (proches.length > 0 && !enCours && survol !== l.cle)
-                        ? (
-                          <a href={urlFichier(ok ? m : proches[0])} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier d’impression">
-                            <Apercu modele={ok ? m : proches[0]} />
-                          </a>
-                        )
-                        : <span className="modele-sans-apercu">{enCours ? <LoaderCircle className="spin" /> : (survol === l.cle ? <Upload /> : <TriangleAlert />)}</span>}
-                    </td>
-                    <td className="nowrap"><span className="ref">{l.reference}</span></td>
-                    <td>
-                      <span className="cell-main">{ok ? m.nom : (l.designation || '—')}</span>
-                      {ok && (
-                        <span className="cell-sub">
-                          <Check size={13} className="text-success" /> {ajouts[l.cle] === 'ok' ? 'Ajouté à la base · ' : ''}{m.fichierNom}
-                        </span>
-                      )}
-                      {ok && l.choix && (
-                        <span className="ligne-ajout">
-                          <span className="cell-sub">Référence de la base : {m.reference}</span>
-                          <button type="button" className="btn btn-ghost btn-xs" onClick={() => majLigne(l.cle, 'choix', undefined)}>Annuler</button>
-                        </span>
-                      )}
-                      {proches.length > 0 && (
-                        <span className="ligne-ajout">
-                          <span className="cell-sub text-warning">Référence différente, s’agit-il de :</span>
-                          {proches.map((p) => (
-                            <button key={p.id} type="button" className="btn btn-secondary btn-xs" onClick={() => majLigne(l.cle, 'choix', p.reference)}>
-                              <Check />{p.reference}
-                            </button>
-                          ))}
-                        </span>
-                      )}
-                      {!ok && !isAdmin && proches.length === 0 && (
-                        <span className="cell-sub text-warning">Absent de la base : la ligne sera créée sans fichier, à ajouter ensuite</span>
-                      )}
-                      {!ok && isAdmin && (
-                        <span className="ligne-ajout">
-                          <span className="cell-sub text-warning">
-                            {survol === l.cle ? 'Lâchez le fichier pour l’ajouter à la base'
-                              : `${proches.length > 0 ? 'Sinon' : 'Absent de la base'} : glissez son fichier ici, ou`}
+        <section className="form-section">
+          <h3 className="form-section-title"><Layers />Lignes de production</h3>
+          <div className="table-wrap">
+            <table className="table demande-table">
+              <thead>
+                <tr>
+                  <th className="col-apercu" aria-label="Aperçu" />
+                  <th>Réf.</th>
+                  <th>Modèle</th>
+                  <th>Type de mug</th>
+                  <th className="num">Qté</th>
+                  <th aria-label="Retirer" />
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map((l) => {
+                  const m = modeleDe(l);
+                  const ok = Boolean(m?.fichierChemin);
+                  const proches = ok ? [] : prochesDe(l);
+                  const enCours = ajouts[l.cle] === 'en-cours';
+                  return (
+                    <tr key={l.cle} className={`${ok ? '' : 'is-missing'}${survol === l.cle ? ' is-drop' : ''}`}
+                        onDragOver={glisser(l, true)} onDragLeave={glisser(l, false)} onDrop={deposerSurLigne(l)}>
+                      <td className="col-apercu">
+                        {ok || (proches.length > 0 && !enCours && survol !== l.cle)
+                          ? (
+                            <a href={urlFichier(ok ? m : proches[0])} target="_blank" rel="noopener noreferrer" title="Ouvrir le fichier d’impression">
+                              <Apercu modele={ok ? m : proches[0]} />
+                            </a>
+                          )
+                          : <span className="modele-sans-apercu">{enCours ? <LoaderCircle className="spin" /> : (survol === l.cle ? <Upload /> : <TriangleAlert />)}</span>}
+                      </td>
+                      <td className="nowrap"><span className="ref">{l.reference}</span></td>
+                      <td>
+                        <span className="cell-main">{ok ? m.nom : (l.designation || '—')}</span>
+                        {ok && (
+                          <span className="cell-sub">
+                            <Check size={13} className="text-success" /> {ajouts[l.cle] === 'ok' ? 'Ajouté à la base · ' : ''}{m.fichierNom}
                           </span>
-                          <BoutonFichier busy={enCours} onFichier={(f) => ajouterFichier(l, f)} />
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <select value={l.typeMug} onChange={(e) => majLigne(l.cle, 'typeMug', e.target.value)} aria-label={`Type de mug pour ${l.reference}`}>
-                        <option value="">—</option>
-                        {produits.map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </td>
-                    <td className="num">
-                      <input type="number" min="0" className="input-qte" value={l.quantite}
-                             onChange={(e) => majLigne(l.cle, 'quantite', e.target.value)} aria-label={`Quantité pour ${l.reference}`} />
-                    </td>
-                    <td className="num">
-                      <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={() => retirerLigne(l.cle)}
-                              title="Retirer cette ligne" aria-label={`Retirer ${l.reference}`}><X /></button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        )}
+                        {ok && l.choix && (
+                          <span className="ligne-ajout">
+                            <span className="cell-sub">Référence de la base : {m.reference}</span>
+                            <button type="button" className="btn btn-ghost btn-xs" onClick={() => majLigne(l.cle, 'choix', undefined)}>Annuler</button>
+                          </span>
+                        )}
+                        {proches.length > 0 && (
+                          <span className="ligne-ajout">
+                            <span className="cell-sub text-warning">Référence différente, s’agit-il de :</span>
+                            {proches.map((p) => (
+                              <button key={p.id} type="button" className="btn btn-secondary btn-xs" onClick={() => majLigne(l.cle, 'choix', p.reference)}>
+                                <Check />{p.reference}
+                              </button>
+                            ))}
+                          </span>
+                        )}
+                        {!ok && !isAdmin && proches.length === 0 && (
+                          <span className="cell-sub text-warning">Absent de la base : la ligne sera créée sans fichier, à ajouter ensuite</span>
+                        )}
+                        {!ok && isAdmin && (
+                          <span className="ligne-ajout">
+                            <span className="cell-sub text-warning">
+                              {survol === l.cle ? 'Lâchez le fichier pour l’ajouter à la base'
+                                : `${proches.length > 0 ? 'Sinon' : 'Absent de la base'} : glissez son fichier ici, ou`}
+                            </span>
+                            <BoutonFichier busy={enCours} onFichier={(f) => ajouterFichier(l, f)} />
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <select value={l.typeMug} onChange={(e) => majLigne(l.cle, 'typeMug', e.target.value)} aria-label={`Type de mug pour ${l.reference}`}>
+                          <option value="">—</option>
+                          {produits.map((p) => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </td>
+                      <td className="num">
+                        <input type="number" min="0" className="input-qte" value={l.quantite}
+                               onChange={(e) => majLigne(l.cle, 'quantite', e.target.value)} aria-label={`Quantité pour ${l.reference}`} />
+                      </td>
+                      <td className="num">
+                        <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={() => retirerLigne(l.cle)}
+                                title="Retirer cette ligne" aria-label={`Retirer ${l.reference}`}><X /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <ChampNotes form={form} setForm={setForm} />
 
         <div className="demande-actions">
           <span className="muted">Les fichiers d’impression sont copiés sur chaque ligne, et la demande est jointe aux documents.</span>

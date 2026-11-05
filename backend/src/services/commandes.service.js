@@ -7,6 +7,8 @@ import { addLog } from './log.service.js';
 import { deleteFichiersForLigne } from './fichiers.service.js';
 import { LOG_ACTIONS, STATUT_EXPEDIEE, STATUT_LABELS } from '../constants.js';
 
+const STATUT_TERMINE = 'Terminé';
+
 // Colonnes triables autorisées (liste blanche).
 const SORTABLE = new Set([
   'reference', 'client', 'nom', 'designation', 'typeMug', 'quantite', 'statut',
@@ -56,7 +58,12 @@ export async function listCommandes({
       orderBy,
       take,
       skip,
-      include: { _count: { select: { fichiers: true } } },
+      include: {
+        _count: { select: { fichiers: true } },
+        // Le strict nécessaire pour repérer ce qui manque (voir manquesDeCommande).
+        lignes: { select: { id: true, typeMug: true, quantite: true } },
+        fichiers: { where: { categorie: 'VISUEL' }, select: { ligneId: true, categorie: true } },
+      },
     }),
   ]);
 
@@ -78,6 +85,30 @@ export function getCommande(id) {
       modifiePar: { select: { nom: true, email: true } },
     },
   });
+}
+
+// Ce qu'il reste à compléter sur une commande en cours : une liste de libellés courts.
+// Une commande expédiée ne compte plus, et une fois terminée son visuel a déjà servi.
+// `accessoires` : voir typesNonComptes ; `admin` : le prix de vente n'est visible qu'à eux.
+export function manquesDeCommande(commande, accessoires, { admin = false } = {}) {
+  if (commande.supprime || commande.statut === STATUT_EXPEDIEE) return [];
+  const manques = [];
+  const lignes = commande.lignes || [];
+  const aImprimer = lignes.filter((l) => !accessoires.has((l.typeMug || '').trim().toUpperCase()));
+
+  if (commande.statut !== STATUT_TERMINE && !commande.fichiersSupprimes && (lignes.length === 0 || aImprimer.length > 0)) {
+    const visuels = commande.fichiers.filter((f) => f.categorie === 'VISUEL');
+    const couvertes = new Set(visuels.map((f) => f.ligneId));
+    const sansVisuel = aImprimer.filter((l) => !couvertes.has(l.id)).length;
+    if (visuels.length === 0) manques.push('Aucun visuel');
+    else if (sansVisuel > 0 && !couvertes.has(null)) manques.push(`${sansVisuel} ligne${sansVisuel > 1 ? 's' : ''} sans visuel`);
+  }
+  if (!commande.dateSortieTexte && !commande.dateLivraison) manques.push('Date de sortie');
+  if (commande.prixEsat == null) manques.push('Prix ESAT');
+  if (admin && commande.prixVente == null) manques.push('Prix de vente');
+  if (lignes.length ? lignes.some((l) => !l.typeMug) : !commande.typeMug) manques.push('Type de mug');
+  if (lignes.length ? lignes.some((l) => !l.quantite) : !commande.quantite) manques.push('Quantité');
+  return manques;
 }
 
 // Vignettes des visuels repris de la base de données : { [id du fichier]: adresse de

@@ -77,7 +77,7 @@ export function masquerMarge(commande, role) {
 export async function index(req, res) {
   const statuts = (req.query.statut || '').split(',').map((s) => s.trim()).filter(Boolean);
   // Liste et compteurs par statut sont indépendants → en parallèle.
-  const [result, counts] = await Promise.all([
+  const [result, counts, accessoires] = await Promise.all([
     service.listCommandes({
       search: req.query.search,
       statuts,
@@ -91,8 +91,13 @@ export async function index(req, res) {
       inclureSupprimees: req.user.role === 'ADMIN' && req.query.inclureSupprimees === 'true',
     }),
     service.countByStatut(),
+    service.typesNonComptes(),
   ]);
-  result.items = result.items.map((c) => masquerMarge(c, req.user.role));
+  const admin = req.user.role === 'ADMIN';
+  result.items = result.items.map((c) => {
+    const { lignes, fichiers, ...commande } = c;
+    return masquerMarge({ ...commande, manques: service.manquesDeCommande(c, accessoires, { admin }) }, req.user.role);
+  });
   res.json({ ...result, counts });
 }
 
@@ -118,7 +123,8 @@ export async function show(req, res) {
     console.error('Vignettes des modèles indisponibles :', err.message);
     return {};
   });
-  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions, apercus });
+  const manques = service.manquesDeCommande(commande, await service.typesNonComptes(), { admin: req.user.role === 'ADMIN' });
+  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions, apercus, manques });
 }
 
 // Prochaine référence disponible (pour préremplir le formulaire).

@@ -273,6 +273,12 @@ export default function CommandeDetail() {
           {isAdmin && <button className="btn btn-secondary btn-sm" onClick={restaurer}><ArchiveRestore />Restaurer</button>}
         </div>
       )}
+      {data.manques?.length > 0 && (
+        <div className="alert alert-warning">
+          <TriangleAlert />
+          <span><strong>À compléter :</strong> {data.manques.join(', ')}</span>
+        </div>
+      )}
 
       {/* En-tête : identité, actions, infos clés, avancement */}
       <div className="card">
