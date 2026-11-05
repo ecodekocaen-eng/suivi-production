@@ -18,8 +18,9 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { decouper, deposer } from './depot.js';
 import { lireTravauxAgent, estImprime, finImpression } from './edgeprint.js';
+import { REGLAGES_RANGEES, composerRangees, deposerRangee, lireVisuel } from './rangees.js';
 
-const VERSION = '1.0.2';
+const VERSION = '1.1.0';
 // Numéro affiché dans l'outil de suivi ; les codes A et B servent à la configuration.
 const NUMEROS = { A: 1, B: 2 };
 // « fetch failed » ne dit rien : on y ajoute la cause réseau (DNS, délai dépassé, coupure…).
@@ -72,6 +73,8 @@ function chargerConfig() {
     dossierTravail: path.join(DOSSIER, 'travail'),
     ...cfg,
     serveur: cfg.serveur.replace(/\/+$/, ''),
+    // « rangees » : false pour revenir au dépôt fichier par fichier.
+    rangees: cfg.rangees === false ? null : { ...REGLAGES_RANGEES, ...cfg.rangees },
   };
 }
 
@@ -123,12 +126,15 @@ function ecrireJournal(journal) {
   fs.renameSync(`${FICHIER_JOURNAL}.tmp`, FICHIER_JOURNAL);
 }
 
-// « 1 fichier × 10 + 2 fichiers × 1 »
+// « 1 fichier × 10 + 2 fichiers × 1 », « 3 fichiers × 10 + 1 rangée »
 function resume(fichiers) {
   const parCopies = new Map();
-  for (const f of fichiers) parCopies.set(f.copies, (parCopies.get(f.copies) || 0) + 1);
-  return [...parCopies].sort((a, b) => b[0] - a[0])
-    .map(([copies, n]) => `${n} fichier${n > 1 ? 's' : ''} × ${copies}`).join(' + ');
+  for (const f of fichiers.filter((x) => !x.rangee)) parCopies.set(f.copies, (parCopies.get(f.copies) || 0) + 1);
+  const parties = [...parCopies].sort((a, b) => b[0] - a[0])
+    .map(([copies, n]) => `${n} fichier${n > 1 ? 's' : ''} × ${copies}`);
+  const rangees = fichiers.filter((x) => x.rangee).length;
+  if (rangees) parties.push(`${rangees} rangée${rangees > 1 ? 's' : ''}`);
+  return parties.join(' + ');
 }
 
 function extensionDe(fichier) {
@@ -144,20 +150,22 @@ async function erreur(cfg, travail, message) {
 // ── Nouveaux envois : téléchargement puis dépôt dans Edge Print ──
 const echecsTelechargement = new Map();
 
-async function deposerEnvoi(cfg, journal, t) {
+// Contrôles puis téléchargement d'un envoi. Renvoie de quoi le déposer, ou rien
+// s'il est déjà parti, en erreur, ou à réessayer au prochain passage.
+async function preparer(cfg, journal, t) {
   const deja = journal[t.id];
   if (deja?.fichiers?.length) {
     // Déjà déposé (redémarrage, ou signalement perdu) : on le signale de nouveau, sans redéposer.
     await signaler(cfg, t.id, 'ENVOYE', `Déposé dans Edge Print (imprimante ${NUMEROS[deja.imprimante]}) : ${resume(deja.fichiers)}`);
-    return;
+    return null;
   }
   const imprimante = cfg.imprimantes[t.imprimante];
-  if (!imprimante) return erreur(cfg, t, `Imprimante ${NUMEROS[t.imprimante]} non configurée sur le PC atelier.`);
-  if (!t.fichier) return erreur(cfg, t, 'Visuel introuvable sur le serveur (supprimé ?).');
+  if (!imprimante) { await erreur(cfg, t, `Imprimante ${NUMEROS[t.imprimante]} non configurée sur le PC atelier.`); return null; }
+  if (!t.fichier) { await erreur(cfg, t, 'Visuel introuvable sur le serveur (supprimé ?).'); return null; }
   const extension = extensionDe(t.fichier);
-  if (!extension) return erreur(cfg, t, `Type de fichier non pris en charge par l'agent (${t.fichier.type}).`);
+  if (!extension) { await erreur(cfg, t, `Type de fichier non pris en charge par l'agent (${t.fichier.type}).`); return null; }
   const manquant = imprimante.dossiers.find((d) => !fs.existsSync(d.chemin));
-  if (manquant) return erreur(cfg, t, `Dossier surveillé introuvable sur le PC atelier : ${manquant.chemin}`);
+  if (manquant) { await erreur(cfg, t, `Dossier surveillé introuvable sur le PC atelier : ${manquant.chemin}`); return null; }
   const plan = decouper(t.quantite, imprimante.dossiers);
 
   const source = path.join(cfg.dossierTravail, `telechargement-${t.id}${extension}`);
@@ -166,30 +174,109 @@ async function deposerEnvoi(cfg, journal, t) {
   } catch (err) {
     const n = (echecsTelechargement.get(t.id) || 0) + 1;
     echecsTelechargement.set(t.id, n);
-    if (n >= ESSAIS_MAX) return erreur(cfg, t, `Téléchargement impossible : ${err.message}`);
-    log(`Envoi #${t.id} : téléchargement à réessayer (${n}/${ESSAIS_MAX}) : ${motif(err)}`);
-    return undefined;
+    if (n >= ESSAIS_MAX) await erreur(cfg, t, `Téléchargement impossible : ${err.message}`);
+    else log(`Envoi #${t.id} : téléchargement à réessayer (${n}/${ESSAIS_MAX}) : ${motif(err)}`);
+    return null;
   }
   echecsTelechargement.delete(t.id);
+  return { t, source, extension, plan };
+}
 
-  let fichiers;
-  try {
-    fichiers = deposer(source, t, plan, extension, cfg.dossierTravail);
-  } catch (err) {
-    if (err.deposes?.length) {
-      journal[t.id] = { depose: new Date().toISOString(), imprimante: t.imprimante, commande: t.commande.reference, fichiers: err.deposes };
-      ecrireJournal(journal);
-    }
-    return erreur(cfg, t, `Dépôt incomplet dans Edge Print : ${err.message}`);
-  } finally {
-    fs.rmSync(source, { force: true });
+// Les transferts à l'unité des PDF prêts, un par exemplaire, dans l'ordre de l'envoi.
+// Un seul transfert n'a pas besoin de rangée : son fichier part tel quel.
+async function transfertsARegrouper(cfg, prets) {
+  if (!cfg.rangees) return [];
+  const transferts = [];
+  for (const pret of prets) {
+    const unites = pret.plan.find((l) => l.copies === 1)?.nombre || 0;
+    const visuel = unites > 0 && pret.extension === '.pdf' ? await lireVisuel(pret.source) : null;
+    for (let i = 0; visuel && i < unites; i += 1) transferts.push({ ...visuel, pret });
   }
-  journal[t.id] = { depose: new Date().toISOString(), imprimante: t.imprimante, commande: t.commande.reference, fichiers };
+  return transferts.length >= 2 ? transferts : [];
+}
+
+// Prépare les rangées, sans rien déposer. Si l'une d'elles résiste, tout part à l'unité.
+async function preparerRangees(cfg, prets, transferts) {
+  if (transferts.length === 0) return [];
+  try {
+    return await composerRangees(transferts, cfg.rangees, cfg.dossierTravail, prets[0].t);
+  } catch (err) {
+    log(`Rangées impossibles (${prets[0].t.commande.reference}) : ${err.message}. Dépôt à l'unité.`);
+    return [];
+  }
+}
+
+// Dépose les envois d'une même commande sur une même imprimante.
+async function deposerGroupe(cfg, journal, travaux) {
+  const prets = [];
+  for (const t of travaux) {
+    try {
+      const pret = await preparer(cfg, journal, t);
+      if (pret) prets.push(pret);
+    } catch (err) {
+      log(`Envoi #${t.id} : ${motif(err)}`);
+    }
+  }
+  if (prets.length === 0) return;
+
+  const fichiers = new Map(prets.map((pret) => [pret, []]));
+  const echecs = new Map();
+  try {
+    const transferts = await transfertsARegrouper(cfg, prets);
+    const rangees = await preparerRangees(cfg, prets, transferts);
+    const regroupes = new Set(rangees.length ? transferts.map((x) => x.pret) : []);
+    const dossier = cfg.imprimantes[prets[0].t.imprimante].dossiers.find((d) => d.copies === 1).chemin;
+
+    for (const pret of prets) {
+      const plan = regroupes.has(pret) ? pret.plan.filter((l) => l.copies > 1) : pret.plan;
+      try {
+        fichiers.get(pret).push(...deposer(pret.source, pret.t, plan, pret.extension, cfg.dossierTravail));
+      } catch (err) {
+        fichiers.get(pret).push(...(err.deposes || []));
+        echecs.set(pret, err);
+      }
+    }
+    for (const [index, rangee] of rangees.entries()) {
+      const concernes = [...new Set(rangee.transferts.map((x) => x.pret))];
+      try {
+        const entree = deposerRangee(rangee, dossier);
+        for (const pret of concernes) fichiers.get(pret).push(entree);
+        log(`Rangée ${index + 1} sur ${rangees.length} (${prets[0].t.commande.reference}) déposée sur l'imprimante ${NUMEROS[prets[0].t.imprimante]} : ${rangee.transferts.length} transferts`);
+      } catch (err) {
+        for (const pret of concernes) echecs.set(pret, err);
+      }
+    }
+  } finally {
+    for (const pret of prets) fs.rmSync(pret.source, { force: true });
+  }
+
+  // Le journal d'abord : un signalement perdu ne provoque jamais de second dépôt.
+  const depose = new Date().toISOString();
+  for (const [pret, liste] of fichiers) {
+    if (liste.length) journal[pret.t.id] = { depose, imprimante: pret.t.imprimante, commande: pret.t.commande.reference, fichiers: liste };
+  }
   ecrireJournal(journal);
-  const detail = resume(fichiers);
-  log(`Envoi #${t.id} (${t.commande.reference}, « ${t.fichierNom} » × ${t.quantite}) déposé sur l'imprimante ${NUMEROS[t.imprimante]} : ${detail}`);
-  await signaler(cfg, t.id, 'ENVOYE', `Déposé dans Edge Print (imprimante ${NUMEROS[t.imprimante]}) : ${detail}`);
-  return undefined;
+  for (const [pret, liste] of fichiers) {
+    const { t } = pret;
+    if (echecs.has(pret)) {
+      await erreur(cfg, t, `Dépôt incomplet dans Edge Print : ${echecs.get(pret).message}`);
+      continue;
+    }
+    const detail = resume(liste);
+    log(`Envoi #${t.id} (${t.commande.reference}, « ${t.fichierNom} » × ${t.quantite}) déposé sur l'imprimante ${NUMEROS[t.imprimante]} : ${detail}`);
+    await signaler(cfg, t.id, 'ENVOYE', `Déposé dans Edge Print (imprimante ${NUMEROS[t.imprimante]}) : ${detail}`);
+  }
+}
+
+// Les envois regroupables ensemble : même lot, même imprimante, même commande.
+function groupesDeDepot(travaux) {
+  const groupes = new Map();
+  for (const t of travaux) {
+    const cle = `${t.lot}|${t.imprimante}|${t.commande.reference}`;
+    if (!groupes.has(cle)) groupes.set(cle, []);
+    groupes.get(cle).push(t);
+  }
+  return [...groupes.values()];
 }
 
 // ── Envois déposés : imprimés ? (lecture de la base d'Edge Print) ──
@@ -230,11 +317,11 @@ async function tour(cfg) {
     version: VERSION,
     imprimantes: Object.entries(cfg.imprimantes).map(([code, imp]) => ({ code, libelle: imp.libelle || code })),
   });
-  for (const t of travaux.filter((x) => x.statut === 'EN_FILE')) {
+  for (const groupe of groupesDeDepot(travaux.filter((x) => x.statut === 'EN_FILE'))) {
     try {
-      await deposerEnvoi(cfg, journal, t);
+      await deposerGroupe(cfg, journal, groupe);
     } catch (err) {
-      log(`Envoi #${t.id} : ${motif(err)}`);
+      log(`Envois de ${groupe[0].commande.reference} : ${motif(err)}`);
     }
   }
   // Base d'Edge Print : lue seulement si un envoi attend, et pas à chaque passage.

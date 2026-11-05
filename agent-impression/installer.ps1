@@ -24,9 +24,11 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 
 New-Item -ItemType Directory -Force $dossier | Out-Null
-foreach ($f in 'agent.js', 'depot.js', 'edgeprint.js', 'package.json', 'config.exemple.json', 'README.md') {
+foreach ($f in 'agent.js', 'depot.js', 'edgeprint.js', 'rangees.js', 'package.json', 'config.exemple.json', 'README.md') {
   Copy-Item (Join-Path $PSScriptRoot $f) $dossier -Force
 }
+New-Item -ItemType Directory -Force (Join-Path $dossier 'vendor') | Out-Null
+Copy-Item (Join-Path $PSScriptRoot 'vendor\*') (Join-Path $dossier 'vendor') -Force
 
 # Lanceur sans fenêtre : la tâche suit l'agent et le relance s'il s'arrête.
 $commande = '"{0}" --no-warnings "{1}"' -f $node, (Join-Path $dossier 'agent.js')

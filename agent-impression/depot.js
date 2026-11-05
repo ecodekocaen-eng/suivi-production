@@ -29,7 +29,7 @@ export function decouper(quantite, dossiers) {
 export const marqueur = (travail, numero) => `[EDK${travail.id}-${String(travail.lot).slice(0, 6)}-${numero}]`;
 
 // Caractères interdits dans un nom de fichier Windows.
-const nomPropre = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim();
+export const nomPropre = (s) => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim();
 
 // « 2026-0138 104HE-22 Mug Je t'aime x10 [EDK57-3f9a1c-1].pdf » : lisible dans la
 // liste d'Edge Print, et le marqueur permet de retrouver le travail dans sa base.
@@ -38,9 +38,20 @@ export function nomDepot(travail, copies, numero, extension) {
   return `${nomPropre(travail.commande.reference)} ${visuel} x${copies} ${marqueur(travail, numero)}${extension}`;
 }
 
+// Déplacement du dossier de travail vers le dossier surveillé : sur le même disque,
+// le fichier y apparaît d'un coup, complet.
+export function mettreEnPlace(temporaire, dossier, nom) {
+  try {
+    fs.renameSync(temporaire, path.join(dossier, nom));
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    // Autre disque : copie directe (le dossier de travail devrait être sur le même disque).
+    fs.copyFileSync(temporaire, path.join(dossier, nom));
+    fs.rmSync(temporaire, { force: true });
+  }
+}
+
 // Dépose le fichier téléchargé selon le plan ; renvoie les fichiers déposés.
-// Copie dans le dossier de travail puis déplacement vers le dossier surveillé :
-// sur le même disque, le fichier y apparaît d'un coup, complet.
 export function deposer(source, travail, plan, extension, dossierTravail) {
   const deposes = [];
   let numero = 0;
@@ -51,14 +62,7 @@ export function deposer(source, travail, plan, extension, dossierTravail) {
         const nom = nomDepot(travail, lot.copies, numero, extension);
         const temporaire = path.join(dossierTravail, `depot-${travail.id}-${numero}${extension}`);
         fs.copyFileSync(source, temporaire);
-        try {
-          fs.renameSync(temporaire, path.join(lot.chemin, nom));
-        } catch (err) {
-          if (err.code !== 'EXDEV') throw err;
-          // Autre disque : copie directe (le dossier de travail devrait être sur le même disque).
-          fs.copyFileSync(temporaire, path.join(lot.chemin, nom));
-          fs.rmSync(temporaire, { force: true });
-        }
+        mettreEnPlace(temporaire, lot.chemin, nom);
         deposes.push({ nom, dossier: lot.chemin, copies: lot.copies, marqueur: marqueur(travail, numero) });
       }
     }

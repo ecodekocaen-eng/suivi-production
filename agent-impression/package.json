@@ -1,6 +1,6 @@
 {
   "name": "ecodeko-agent-impression",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Agent d'impression du PC atelier : dépose les transferts de la file d'impression dans Edge Print et signale leur impression.",
   "private": true,
   "type": "module",
