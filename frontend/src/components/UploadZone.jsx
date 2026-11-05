@@ -9,10 +9,11 @@ import { Upload, FilePlus, LoaderCircle } from 'lucide-react';
 import { envoyerFichiers, useTailleMax, libelleTailleMax } from '../televersement.js';
 import { useToast } from '../ui/feedback.jsx';
 
-const ACCEPT_VISUELS = 'image/jpeg,image/png,image/gif,image/webp,application/pdf';
+export const ACCEPT_VISUELS = 'image/jpeg,image/png,image/gif,image/webp,application/pdf';
 const ACCEPT_DOCS = `${ACCEPT_VISUELS},.doc,.docx,.xls,.xlsx,.csv`;
 
-export default function UploadZone({ commandeId, ligneId = null, onUploaded, compact = false, categorie = 'visuel' }) {
+// `mini` : une seule ligne, l'aide passe au survol.
+export default function UploadZone({ commandeId, ligneId = null, onUploaded, compact = false, mini = false, categorie = 'visuel' }) {
   const inputRef = useRef(null);
   const toast = useToast();
   const [dragOver, setDragOver] = useState(false);
@@ -56,7 +57,8 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
   return (
     <div>
       <div
-        className={`dropzone${dragOver ? ' is-over' : ''}${compact ? ' dropzone-compact' : ''}`}
+        className={`dropzone${dragOver ? ' is-over' : ''}${compact ? ' dropzone-compact' : ''}${mini ? ' dropzone-mini' : ''}`}
+        title={mini ? aide : undefined}
         role="button"
         tabIndex={0}
         onClick={() => inputRef.current?.click()}
@@ -72,7 +74,7 @@ export default function UploadZone({ commandeId, ligneId = null, onUploaded, com
         </span>
         <span className="dropzone-text">
           <strong>{busy ? `Envoi en cours… ${progress} %` : titre}</strong>
-          {!busy && <span>{aide}</span>}
+          {!busy && !mini && <span>{aide}</span>}
         </span>
       </div>
       {busy && <div className="progress"><div className="progress-bar" style={{ width: `${progress}%` }} /></div>}

@@ -113,7 +113,12 @@ export async function show(req, res) {
     console.error('Envois à l’impression indisponibles :', err.message);
     return [];
   });
-  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions });
+  // Sans vignette, la fiche s'ouvre quand même : le navigateur rendra le PDF.
+  const apercus = await service.apercusDesModeles(commande.fichiers).catch((err) => {
+    console.error('Vignettes des modèles indisponibles :', err.message);
+    return {};
+  });
+  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions, apercus });
 }
 
 // Prochaine référence disponible (pour préremplir le formulaire).

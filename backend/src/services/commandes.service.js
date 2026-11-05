@@ -80,6 +80,23 @@ export function getCommande(id) {
   });
 }
 
+// Vignettes des visuels repris de la base de données : { [id du fichier]: adresse de
+// celle du modèle }. Une copie se reconnaît à son nom et à sa taille.
+export async function apercusDesModeles(fichiers) {
+  const pdf = fichiers.filter((f) => f.categorie === 'VISUEL' && !(f.type || '').startsWith('image/'));
+  if (pdf.length === 0) return {};
+  const modeles = await prisma.modele.findMany({
+    where: { fichierNom: { in: pdf.map((f) => f.nom) }, apercuChemin: { not: null } },
+    select: { id: true, fichierNom: true, fichierTaille: true, updatedAt: true },
+  });
+  const apercus = {};
+  for (const f of pdf) {
+    const m = modeles.find((x) => x.fichierNom === f.nom && x.fichierTaille === f.taille);
+    if (m) apercus[f.id] = `/api/modeles/${m.id}/apercu?v=${encodeURIComponent(m.updatedAt.toISOString())}`;
+  }
+  return apercus;
+}
+
 // Noms (normalisés) des produits non comptés en mugs (étiquettes, accessoires…).
 export async function typesNonComptes() {
   const rows = await prisma.produit.findMany({

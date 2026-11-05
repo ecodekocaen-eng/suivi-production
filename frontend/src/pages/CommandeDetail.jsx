@@ -1,15 +1,15 @@
 // ─────────────────────────────────────────────────────────────
-//  Fiche commande : en-tête (infos clés + avancement cliquable),
-//  lignes de production (réglage presse + visuels), documents,
-//  détails et historique. Modification dans une fenêtre dédiée.
+//  Fiche commande : en-tête compact (infos clés + avancement cliquable),
+//  liste des lignes de production avec leur visuel, panneau de détail
+//  d'une ligne, documents, détails et historique. Modification dans une
+//  fenêtre dédiée.
 // ─────────────────────────────────────────────────────────────
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Pencil, Download, Trash, ArchiveRestore, Package, CalendarClock, CalendarDays, Factory, Euro,
-  Layers, FolderOpen, Info, Check, Undo2, Truck, MessageSquareText, Link2, ExternalLink, ListChecks,
+  ArrowLeft, Pencil, Download, Trash, ArchiveRestore, Layers, FolderOpen, Info, Check, Undo2, Truck, ListChecks,
   ScrollText, Plus, Upload, Flag, Thermometer, CircleDot, FileX, Receipt, Mail, Printer, PrinterCheck, Ban,
-  TriangleAlert,
+  TriangleAlert, Ellipsis,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -18,10 +18,9 @@ import { fmtDate, fmtDateTime, fmtNumber, fmtEuro, fmtRelative, echeance, plural
 import { Loading, EmptyState, usePageTitle } from '../ui/bits.jsx';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import { StatutBadge, StatutIcon, Echeance } from '../components/Statut.jsx';
-import GalerieVisuels from '../components/GalerieVisuels.jsx';
 import UploadZone from '../components/UploadZone.jsx';
-import Thumb, { imageProduit } from '../components/Thumb.jsx';
-import ReglageLigne from '../components/ReglageLigne.jsx';
+import { imageProduit } from '../components/Thumb.jsx';
+import { LigneProduction, PanneauLigne } from '../components/LigneProduction.jsx';
 import DocumentsList from '../components/DocumentsList.jsx';
 import CommandeFormModal from '../components/CommandeFormModal.jsx';
 import ImpressionModal from '../components/ImpressionModal.jsx';
@@ -31,6 +30,10 @@ import { ImpressionBadge, derniersEnvoisPar } from '../components/ImpressionEtat
 const normVisuel = (s) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
 const RETENTION_JOURS = 60;
+// Jusqu'à ce nombre de lignes, le visuel s'affiche en grand.
+const LIGNES_GRANDES = 3;
+// Événements de l'historique visibles avant « Tout voir ».
+const HISTORIQUE_COURT = 3;
 
 // Icône et teinte d'un événement de l'historique.
 const EVENEMENTS = {
@@ -49,14 +52,37 @@ const EVENEMENTS = {
   IMPRESSION_ANNULEE: { Icone: Ban },
 };
 
-function Fact({ icon: Icone, label, children, tone = null }) {
+function Fait({ label, tone = null, children }) {
   return (
-    <div className={`fact${tone ? ` is-${tone}` : ''}`}>
-      <span className="fact-icon"><Icone /></span>
-      <span className="fact-text">
-        <span className="fact-label">{label}</span>
-        <span className="fact-value">{children}</span>
-      </span>
+    <div className={`fait${tone ? ` is-${tone}` : ''}`}>
+      <span>{label}</span>
+      <strong>{children}</strong>
+    </div>
+  );
+}
+
+// Actions secondaires, derrière le bouton « … ».
+function MenuPlus({ children }) {
+  const [ouvert, setOuvert] = useState(false);
+  const racine = useRef(null);
+
+  useEffect(() => {
+    if (!ouvert) return undefined;
+    const clic = (e) => { if (!racine.current?.contains(e.target)) setOuvert(false); };
+    const touche = (e) => { if (e.key === 'Escape') setOuvert(false); };
+    document.addEventListener('mousedown', clic);
+    document.addEventListener('keydown', touche);
+    return () => {
+      document.removeEventListener('mousedown', clic);
+      document.removeEventListener('keydown', touche);
+    };
+  }, [ouvert]);
+
+  return (
+    <div className="menu" ref={racine}>
+      <button type="button" className="btn btn-secondary btn-icon" aria-haspopup="menu" aria-expanded={ouvert}
+              title="Plus d’actions" aria-label="Plus d’actions" onClick={() => setOuvert((o) => !o)}><Ellipsis /></button>
+      {ouvert && <div className="menu-liste" role="menu" onClick={() => setOuvert(false)}>{children}</div>}
     </div>
   );
 }
@@ -73,6 +99,8 @@ export default function CommandeDetail() {
   const [impression, setImpression] = useState(false);
   const [statutBusy, setStatutBusy] = useState(false);
   const [produitsByNom, setProduitsByNom] = useState({});
+  const [ligneOuverte, setLigneOuverte] = useState(null);
+  const [historiqueComplet, setHistoriqueComplet] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -108,6 +136,7 @@ export default function CommandeDetail() {
 
   const { commande, logs } = data;
   const reglages = data.reglages || {};
+  const apercus = data.apercus || {};
   const isAdmin = user?.role === 'ADMIN';
   const peutFacturer = isAdmin || user?.role === 'COMPTABLE' || user?.accesFacturation;
 
@@ -205,40 +234,33 @@ export default function CommandeDetail() {
     } catch (err) { toast.error(err.message); }
   };
 
-  const sortieTexte = commande.dateSortieTexte || fmtDate(commande.dateLivraison);
-  const rendLigne = (l) => {
-    const prod = produitsByNom[l.typeMug];
-    const accessoire = prod?.compteMugs === false;
-    return (
-      <div className="line" key={l.id}>
-        <div className="line-head">
-          <Thumb src={imageProduit(prod)} alt={l.typeMug || ''} size={44} />
-          <div className="line-head-text">
-            <span className="line-visuel">{l.visuel || 'Visuel sans nom'}</span>
-            <span className="line-type">{l.typeMug || 'Type non précisé'}{accessoire ? ' · accessoire' : ''}</span>
-          </div>
-          {badgesEnvois(l.id)}
-          <div className="line-qty">
-            <strong>{fmtNumber(l.quantite)}</strong>
-            <span>{accessoire ? 'pièces' : 'mugs'}</span>
-          </div>
-        </div>
-        <div className="line-body">
-          {(l.commentaire || l.lien) && (
-            <div className="line-notes">
-              {l.commentaire && <span><MessageSquareText />{l.commentaire}</span>}
-              {l.lien && (
-                <a href={l.lien} target="_blank" rel="noopener noreferrer"><Link2 />Lien de transfert<ExternalLink size={12} /></a>
-              )}
-            </div>
-          )}
-          <ReglageLigne visuel={l.visuel} reglage={reglages[normVisuel(l.visuel)]} onSaved={load} />
-          <GalerieVisuels commandeId={commande.id} fichiers={filesByLigne[l.id] || []} onChange={load} />
-          {!expediee && <UploadZone commandeId={commande.id} ligneId={l.id} onUploaded={load} compact />}
-        </div>
-      </div>
-    );
+  // Une rangée par ligne de commande ; sans lignes (import), une seule rangée pour la
+  // commande ; et les visuels éventuels non rattachés à une ligne à la fin.
+  const decrireLigne = (l) => {
+    const produit = produitsByNom[l.typeMug];
+    const accessoire = produit?.compteMugs === false;
+    const fichiers = l.fichiers;
+    return {
+      ...l,
+      accessoire,
+      imageProduit: imageProduit(produit),
+      reglage: reglages[normVisuel(l.visuel)],
+      visuel: l.visuel || 'Visuel sans nom',
+      manquante: fichiers.length === 0 && !accessoire && !commande.fichiersSupprimes,
+    };
   };
+  const lignes = (commande.lignes?.length > 0
+    ? commande.lignes.map((l) => ({ ...l, cle: l.id, ligneId: l.id, fichiers: filesByLigne[l.id] || [] }))
+    : [{ cle: 'commande', ligneId: null, visuel: commande.designation, typeMug: commande.typeMug, quantite: qte, fichiers: visuels }]
+  ).map(decrireLigne);
+  if (commande.lignes?.length > 0 && filesGeneral.length > 0) {
+    lignes.push({ cle: 'commande', ligneId: null, visuel: 'Visuels non rattachés à une ligne', fichiers: filesGeneral, nonRattachee: true });
+  }
+  const grandesLignes = lignes.length <= LIGNES_GRANDES;
+  const indexOuvert = lignes.findIndex((l) => l.cle === ligneOuverte);
+  const ajoutPossible = (l) => !expediee && !commande.supprime && !l.nonRattachee;
+  const logsVisibles = historiqueComplet ? logs : logs.slice(0, HISTORIQUE_COURT);
+  const sortieTexte = commande.dateSortieTexte || fmtDate(commande.dateLivraison);
 
   return (
     <>
@@ -252,7 +274,7 @@ export default function CommandeDetail() {
         </div>
       )}
 
-      {/* En-tête : identité, infos clés, actions, avancement */}
+      {/* En-tête : identité, actions, infos clés, avancement */}
       <div className="card">
         <div className="order-hero">
           <div className="order-hero-top">
@@ -262,63 +284,50 @@ export default function CommandeDetail() {
                 <StatutBadge statut={commande.statut} />
                 <Echeance commande={commande} />
               </div>
-              <h1 className="order-title">{commande.client}</h1>
-              <p className="order-sub">{commande.nom || commande.designation}</p>
+              <h1 className="order-title">
+                {commande.client}{(commande.nom || commande.designation) && <span> · {commande.nom || commande.designation}</span>}
+              </h1>
             </div>
             <div className="page-actions">
-              {visuels.length > 0 && (
-                <a className="btn btn-secondary" href={`/api/commandes/${commande.id}/fichiers/zip`}>
-                  <Download />Tous les visuels (.zip)
-                </a>
-              )}
-              {!commande.supprime && (
-                <button className="btn btn-secondary" onClick={remettreNonLue}
-                        title="La commande redevient « non lue » dans le tableau de suivi"><Mail />Marquer non lue</button>
-              )}
-              <button className={`btn ${imprimerEnAvant ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setEdition(true)}><Pencil />Modifier</button>
               {peutImprimer && (
                 <button className={`btn ${imprimerEnAvant ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setImpression(true)}
                         title="Envoyer les transferts au PC atelier (Edge Print)"><Printer />Imprimer</button>
               )}
-              {isAdmin && !commande.supprime && (
-                <button className="btn btn-danger-ghost btn-icon" onClick={supprimer}
-                        title="Mettre à la corbeille" aria-label="Mettre à la corbeille"><Trash /></button>
+              {visuels.length > 0 && (
+                <a className="btn btn-secondary" href={`/api/commandes/${commande.id}/fichiers/zip`}><Download />Visuels (.zip)</a>
+              )}
+              <button className={`btn ${imprimerEnAvant ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setEdition(true)}><Pencil />Modifier</button>
+              {!commande.supprime && (
+                <MenuPlus>
+                  <button type="button" role="menuitem" className="menu-item" onClick={remettreNonLue}
+                          title="La commande redevient « non lue » dans le tableau de suivi"><Mail />Marquer non lue</button>
+                  {isAdmin && <button type="button" role="menuitem" className="menu-item is-danger" onClick={supprimer}><Trash />Mettre à la corbeille</button>}
+                </MenuPlus>
               )}
             </div>
           </div>
 
-          <div className="facts">
-            <Fact icon={Package} label="Quantité">{plural(qte, 'mug')}</Fact>
-            <Fact icon={CalendarClock} label="Date de sortie"
-                  tone={ech?.type === 'late' ? 'alert' : (ech ? 'warn' : null)}>
-              {sortieTexte}
-            </Fact>
-            <Fact icon={CalendarDays} label="Commandée le">{fmtDate(commande.dateCommande)}</Fact>
-            <Fact icon={Factory} label="Atelier">{commande.atelier || '—'}</Fact>
-            <Fact icon={Euro} label="Prix ESAT">
-              {commande.prixEsat != null ? `${fmtEuro(commande.prixEsat)} / mug` : '—'}
-            </Fact>
+          <div className="faits">
+            <Fait label="Quantité">{plural(qte, 'mug')}</Fait>
+            <Fait label="Visuels">{fmtNumber(visuels.length)}</Fait>
+            <Fait label="Date de sortie" tone={ech?.type === 'late' ? 'alert' : (ech ? 'warn' : null)}>{sortieTexte}</Fait>
+            <Fait label="Commandée le">{fmtDate(commande.dateCommande)}</Fait>
+            <Fait label="Atelier">{commande.atelier || '—'}</Fait>
+            <Fait label="Prix ESAT">{commande.prixEsat != null ? `${fmtEuro(commande.prixEsat)} / mug` : '—'}</Fait>
           </div>
-        </div>
 
-        <div className="stepper-wrap">
-          <div className="stepper-head">
-            <h2 className="section-title">Avancement</h2>
-            {!commande.supprime && (
-              <span className="stepper-hint"><Info />Cliquez sur une étape pour changer le statut</span>
-            )}
-          </div>
-          <div className="stepper">
+          <div className="etapes">
             {STATUTS.map((s, i) => {
-              const etat = i < indexStatut ? 'is-done' : (i === indexStatut ? `is-current ${STATUT_CLASS[s]}` : '');
+              const etat = i < indexStatut ? 'is-fait' : (i === indexStatut ? `is-actuelle ${STATUT_CLASS[s]}` : '');
               return (
-                <button key={s} type="button" className={`step ${etat}`}
+                <button key={s} type="button" className={`etape ${etat}`}
                         disabled={i === indexStatut || statutBusy || commande.supprime}
                         onClick={() => changerStatut(s)}
                         aria-current={i === indexStatut ? 'step' : undefined}
                         title={i === indexStatut ? 'Statut actuel' : `Passer à « ${STATUT_LABELS[s]} »`}>
-                  <span className="step-dot">{i < indexStatut ? <Check strokeWidth={3} /> : <StatutIcon statut={s} />}</span>
-                  <span className="step-label">{STATUT_LABELS[s]}</span>
+                  {i < indexStatut && <Check strokeWidth={3} />}
+                  {i === indexStatut && <StatutIcon statut={s} />}
+                  {STATUT_LABELS[s]}
                 </button>
               );
             })}
@@ -330,91 +339,49 @@ export default function CommandeDetail() {
         <div className="detail-main">
           {/* Lignes de production */}
           <div className="card">
-            <div className="card-header">
+            <div className="card-header is-fin">
               <h2 className="card-title"><Layers />Production
                 <span className="count">· {plural(commande.lignes?.length || 1, 'ligne')}</span>
               </h2>
-              <span className="card-subtitle">{plural(visuels.length, 'visuel')}</span>
             </div>
-            <div className="card-body">
-              {commande.fichiersSupprimes && (
-                <div className="alert alert-info">
-                  <Info />
-                  <span>Les visuels ont été supprimés automatiquement le {fmtDateTime(commande.fichiersSupprimesAt)} ({RETENTION_JOURS} jours après l’expédition).</span>
-                </div>
-              )}
-              {!commande.fichiersSupprimes && expediee && commande.dateExpedition && (
-                <div className="alert alert-info">
-                  <Info />
-                  <span>Commande expédiée : les visuels sont conservés jusqu’au <strong>{fmtDate(new Date(new Date(commande.dateExpedition).getTime() + RETENTION_JOURS * 86400000))}</strong> (SAV), puis supprimés automatiquement.</span>
-                </div>
-              )}
-
-              {commande.lignes?.length > 0 ? (
-                <>
-                  {commande.lignes.map(rendLigne)}
-                  {/* Visuels éventuels non rattachés à une ligne */}
-                  {filesGeneral.length > 0 && (
-                    <div className="line">
-                      <div className="line-head">
-                        <div className="line-head-text"><span className="line-visuel">Visuels non rattachés à une ligne</span></div>
-                      </div>
-                      <div className="line-body">
-                        <GalerieVisuels commandeId={commande.id} fichiers={filesGeneral} onChange={load} />
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* Commande sans lignes (import) : visuels au niveau commande */
-                <div className="line">
-                  <div className="line-head">
-                    <Thumb src={imageProduit(produitsByNom[commande.typeMug])} alt="" size={44} />
-                    <div className="line-head-text">
-                      <span className="line-visuel">{commande.designation || 'Visuel sans nom'}</span>
-                      <span className="line-type">{commande.typeMug || 'Type non précisé'}</span>
-                    </div>
-                    {badgesEnvois('commande')}
-                    <div className="line-qty"><strong>{fmtNumber(qte)}</strong><span>mugs</span></div>
+            {(commande.fichiersSupprimes || (expediee && commande.dateExpedition)) && (
+              <div className="card-body is-fin">
+                {commande.fichiersSupprimes ? (
+                  <div className="alert alert-info">
+                    <Info />
+                    <span>Les visuels ont été supprimés automatiquement le {fmtDateTime(commande.fichiersSupprimesAt)} ({RETENTION_JOURS} jours après l’expédition).</span>
                   </div>
-                  <div className="line-body">
-                    <ReglageLigne visuel={commande.designation} reglage={reglages[normVisuel(commande.designation)]} onSaved={load} />
-                    <GalerieVisuels commandeId={commande.id} fichiers={visuels} onChange={load} />
-                    {!expediee && <UploadZone commandeId={commande.id} onUploaded={load} />}
+                ) : (
+                  <div className="alert alert-info">
+                    <Info />
+                    <span>Commande expédiée : les visuels sont conservés jusqu’au <strong>{fmtDate(new Date(new Date(commande.dateExpedition).getTime() + RETENTION_JOURS * 86400000))}</strong> (SAV), puis supprimés automatiquement.</span>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Documents (bons de commande, rendus 3D…) */}
-          <div className="card">
-            <div className="card-header">
-              <h2 className="card-title"><FolderOpen />Documents <span className="count">· {documents.length}</span></h2>
-              <span className="card-subtitle">Bons de commande, rendus 3D… conservés, jamais supprimés automatiquement</span>
-            </div>
-            <div className="card-body stack" style={{ gap: '.75rem' }}>
-              <DocumentsList commandeId={commande.id} fichiers={documents} onChange={load} />
-              <UploadZone commandeId={commande.id} onUploaded={load} categorie="document" compact />
-            </div>
+                )}
+              </div>
+            )}
+            {lignes.map((l) => (
+              <LigneProduction
+                key={l.nonRattachee ? 'non-rattachee' : l.cle}
+                ligne={l}
+                commandeId={commande.id}
+                apercus={apercus}
+                grande={grandesLignes}
+                avecEtat={impressions.length > 0}
+                etat={badgesEnvois(l.cle)}
+                ajoutPossible={ajoutPossible(l)}
+                onOuvrir={() => setLigneOuverte(l.cle)}
+              />
+            ))}
           </div>
         </div>
 
         <aside className="detail-side">
           {/* Détails */}
           <div className="card">
-            <div className="card-header"><h2 className="card-title"><ListChecks />Détails</h2></div>
-            <div className="card-body">
+            <div className="card-header is-fin"><h2 className="card-title"><ListChecks />Détails</h2></div>
+            <div className="card-body is-fin">
               <dl className="kv">
-                <dt>Référence</dt><dd className="mono">{commande.reference}</dd>
-                <dt>Client</dt><dd>{commande.client}</dd>
-                <dt>Nom</dt><dd>{commande.nom || '—'}</dd>
-                <dt>Désignation</dt><dd>{commande.designation || '—'}</dd>
-                <dt>Type de mug</dt><dd>{commande.typeMug || '—'}</dd>
-                <dt>Quantité</dt><dd className="tnum">{fmtNumber(qte)}</dd>
                 <dt>Rebut</dt><dd className="tnum">{fmtNumber(commande.rebut || 0)}</dd>
-                <div className="kv-sep" />
-                <dt>Prix ESAT</dt><dd>{commande.prixEsat != null ? fmtEuro(commande.prixEsat) : '—'}</dd>
                 <dt>Montant ESAT</dt><dd>{commande.prixEsat != null ? fmtEuro(commande.prixEsat * qte) : '—'}</dd>
                 {isAdmin && (
                   <>
@@ -431,7 +398,6 @@ export default function CommandeDetail() {
                     )}
                   </>
                 )}
-                <div className="kv-sep" />
                 <dt>Facturation ESAT</dt>
                 <dd>
                   {commande.factureAt
@@ -452,13 +418,33 @@ export default function CommandeDetail() {
             </div>
           </div>
 
+          {/* Documents (bons de commande, rendus 3D…) */}
+          <div className="card">
+            <div className="card-header is-fin">
+              <h2 className="card-title" title="Bons de commande, rendus 3D… conservés, jamais supprimés automatiquement">
+                <FolderOpen />Documents <span className="count">· {documents.length}</span>
+              </h2>
+            </div>
+            <div className="card-body is-fin stack" style={{ gap: '.5rem' }}>
+              <DocumentsList commandeId={commande.id} fichiers={documents} onChange={load} />
+              <UploadZone commandeId={commande.id} onUploaded={load} categorie="document" compact mini />
+            </div>
+          </div>
+
           {/* Historique */}
           <div className="card">
-            <div className="card-header"><h2 className="card-title"><ScrollText />Historique</h2></div>
-            <div className="card-body">
+            <div className="card-header is-fin">
+              <h2 className="card-title"><ScrollText />Historique</h2>
+              {logs.length > HISTORIQUE_COURT && (
+                <button type="button" className="btn btn-ghost btn-xs" onClick={() => setHistoriqueComplet((v) => !v)}>
+                  {historiqueComplet ? 'Réduire' : `Tout voir (${logs.length})`}
+                </button>
+              )}
+            </div>
+            <div className="card-body is-fin">
               {logs.length === 0 ? <p className="muted small">Aucun événement.</p> : (
                 <ul className="timeline">
-                  {logs.map((l) => {
+                  {logsVisibles.map((l) => {
                     const ev = EVENEMENTS[l.action] || { Icone: CircleDot };
                     return (
                       <li key={l.id} className="timeline-item">
@@ -479,6 +465,21 @@ export default function CommandeDetail() {
         </aside>
       </div>
 
+      {indexOuvert >= 0 && (
+        <PanneauLigne
+          ligne={lignes[indexOuvert]}
+          numero={indexOuvert + 1}
+          total={lignes.length}
+          commandeId={commande.id}
+          apercus={apercus}
+          etat={badgesEnvois(lignes[indexOuvert].cle)}
+          ajoutPossible={ajoutPossible(lignes[indexOuvert])}
+          onClose={() => setLigneOuverte(null)}
+          onChange={load}
+          onPrecedente={() => setLigneOuverte(lignes[indexOuvert - 1].cle)}
+          onSuivante={() => setLigneOuverte(lignes[indexOuvert + 1].cle)}
+        />
+      )}
       {edition && (
         <CommandeFormModal
           commande={commande}

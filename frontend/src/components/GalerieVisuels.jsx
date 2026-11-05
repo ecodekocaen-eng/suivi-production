@@ -1,16 +1,23 @@
 // ─────────────────────────────────────────────────────────────
-//  Galerie de visuels : vignettes (fond damier pour la transparence),
-//  ouverture, téléchargement, suppression (avec confirmation).
+//  Visuels d'une ligne, dans son panneau de détail : grand aperçu,
+//  ouverture, téléchargement, remplacement et suppression (avec confirmation).
 // ─────────────────────────────────────────────────────────────
-import { Download, ExternalLink, Trash, FileText } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Download, ExternalLink, LoaderCircle, Trash, Upload } from 'lucide-react';
 import { api } from '../api.js';
 import { fmtSize, fmtDate } from '../format.js';
+import { envoyerFichiers } from '../televersement.js';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
+import ApercuVisuel from './ApercuVisuel.jsx';
+import { ACCEPT_VISUELS } from './UploadZone.jsx';
 
-export default function GalerieVisuels({ commandeId, fichiers, onChange, lectureSeule = false }) {
+export default function GalerieVisuels({ commandeId, ligneId = null, fichiers, apercus, remplacable = false, onChange }) {
   const base = `/api/commandes/${commandeId}/fichiers`;
   const confirmer = useConfirm();
   const toast = useToast();
+  const selecteur = useRef(null);
+  const [aRemplacer, setARemplacer] = useState(null);
+  const [remplacement, setRemplacement] = useState(false);
 
   const supprimer = async (f) => {
     const ok = await confirmer({
@@ -28,36 +35,52 @@ export default function GalerieVisuels({ commandeId, fichiers, onChange, lecture
     } catch (err) { toast.error(err.message); }
   };
 
+  // Le nouveau fichier d'abord : si son envoi échoue, l'ancien reste en place.
+  const remplacer = async (nouveau) => {
+    if (!nouveau || !aRemplacer) return;
+    setRemplacement(true);
+    try {
+      await envoyerFichiers({ commandeId, ligneId, files: [nouveau] });
+      await api.del(`/commandes/${commandeId}/fichiers/${aRemplacer.id}`);
+      toast.success('Visuel remplacé');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRemplacement(false);
+      setARemplacer(null);
+      onChange();
+    }
+  };
+
   if (fichiers.length === 0) return null;
 
   return (
-    <div className="gallery">
-      {fichiers.map((f) => {
-        const isImage = (f.type || '').startsWith('image/');
-        return (
-          <figure className="tile" key={f.id} style={{ margin: 0 }}>
-            <a className="tile-media" href={`${base}/${f.id}/view`} target="_blank" rel="noopener noreferrer" title={`Ouvrir ${f.nom}`}>
-              {isImage
-                ? <img src={`${base}/${f.id}/view`} alt={f.nom} loading="lazy" />
-                : <span className="tile-file"><FileText />PDF</span>}
-            </a>
-            <figcaption className="tile-info">
-              <div className="tile-name" title={f.nom}>{f.nom}</div>
-              <div className="tile-meta">{fmtSize(f.taille)} · {fmtDate(f.createdAt)}</div>
-            </figcaption>
-            <div className="tile-actions">
-              <a className="btn btn-secondary btn-icon btn-xs" href={`${base}/${f.id}/view`} target="_blank" rel="noopener noreferrer"
-                 title="Ouvrir dans un nouvel onglet" aria-label={`Ouvrir ${f.nom}`}><ExternalLink /></a>
-              <a className="btn btn-secondary btn-icon btn-xs" href={`${base}/${f.id}/download`}
-                 title="Télécharger" aria-label={`Télécharger ${f.nom}`}><Download /></a>
-              {!lectureSeule && (
-                <button type="button" className="btn btn-danger-ghost btn-icon btn-xs" onClick={() => supprimer(f)}
-                        title="Supprimer" aria-label={`Supprimer ${f.nom}`}><Trash /></button>
-              )}
-            </div>
-          </figure>
-        );
-      })}
+    <div className="visuels">
+      <input ref={selecteur} type="file" accept={ACCEPT_VISUELS} hidden
+             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; remplacer(f); }} />
+      {fichiers.map((f) => (
+        <figure className="visuel" key={f.id}>
+          <a href={`${base}/${f.id}/view`} target="_blank" rel="noopener noreferrer" title={`Ouvrir ${f.nom}`}>
+            <ApercuVisuel commandeId={commandeId} fichier={f} apercu={apercus?.[f.id]} />
+          </a>
+          <figcaption>
+            <span className="visuel-nom" title={f.nom}>{f.nom}</span>
+            <span className="visuel-meta">{fmtSize(f.taille)} · {fmtDate(f.createdAt)}</span>
+          </figcaption>
+          <div className="visuel-boutons">
+            <a className="btn btn-secondary btn-sm" href={`${base}/${f.id}/view`} target="_blank" rel="noopener noreferrer"><ExternalLink />Ouvrir</a>
+            <a className="btn btn-secondary btn-sm" href={`${base}/${f.id}/download`}><Download />Télécharger</a>
+            {remplacable && (
+              <button type="button" className="btn btn-secondary btn-sm" disabled={remplacement}
+                      onClick={() => { setARemplacer(f); selecteur.current?.click(); }}>
+                {remplacement && aRemplacer?.id === f.id ? <LoaderCircle className="spin" /> : <Upload />}Remplacer
+              </button>
+            )}
+            <button type="button" className="btn btn-danger-ghost btn-icon btn-sm" onClick={() => supprimer(f)}
+                    title="Supprimer" aria-label={`Supprimer ${f.nom}`}><Trash /></button>
+          </div>
+        </figure>
+      ))}
     </div>
   );
 }

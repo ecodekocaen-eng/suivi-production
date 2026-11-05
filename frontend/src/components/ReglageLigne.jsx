@@ -85,7 +85,7 @@ export default function ReglageLigne({ visuel, reglage, onSaved }) {
   return (
     <div className="press press-empty">
       <Thermometer size={16} />
-      <span>Aucun réglage presse enregistré pour ce visuel.</span>
+      <span>Pas de réglage presse</span>
       <button type="button" className="btn btn-secondary btn-xs press-action" onClick={ouvrir}><Plus />Ajouter le réglage</button>
     </div>
   );
