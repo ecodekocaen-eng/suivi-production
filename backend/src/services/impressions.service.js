@@ -196,9 +196,11 @@ async function apresImpression(envoi, userId) {
   if (!commande || commande.supprime || commande.statut !== 'En attente') return;
 
   const accessoires = await typesNonComptes();
-  const lignesAvecVisuel = new Set(commande.fichiers.map((f) => f.ligneId).filter((id) => id != null));
-  const aImprimer = commande.lignes.filter((l) => lignesAvecVisuel.has(l.id)
-    && !accessoires.has((l.typeMug || '').trim().toUpperCase()));
+  // Comme pour « À compléter » (manquesDeCommande) : une ligne de mugs sans visuel reste
+  // à imprimer, sauf si des visuels non rattachés à une ligne peuvent la couvrir.
+  const couvertes = new Set(commande.fichiers.map((f) => f.ligneId));
+  const aImprimer = commande.lignes.filter((l) => !accessoires.has((l.typeMug || '').trim().toUpperCase())
+    && (couvertes.has(l.id) || !couvertes.has(null)));
   const imprimees = new Set(commande.impressions.filter((i) => i.statut === 'IMPRIME').map((i) => i.ligneId));
   const retenues = new Set(commande.impressions.filter((i) => retientSaLigne(i, commande.impressions)).map((i) => i.ligneId));
   // Visuels au niveau de la commande (sans ligne) : un visuel imprimé suffit.
