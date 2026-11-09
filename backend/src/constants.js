@@ -25,6 +25,12 @@ export const STATUT_LABELS = {
 // Statut qui déclenche la suppression automatique des fichiers.
 export const STATUT_EXPEDIEE = 'Expédié';
 
+// Commande faite par ECO'DEKO (en boutique) et non par l'ESAT : son atelier vaut
+// ECO'DEKO, elle n'a pas de prix ESAT et reste hors de la facturation de l'ESAT.
+// ⚠️ Même règle dans frontend/src/constants.js.
+export const ATELIER_ECODEKO = "ECO'DEKO";
+export const faiteParEcodeko = (commande) => String(commande?.atelier ?? '').toUpperCase().replace(/[^A-Z]/g, '') === 'ECODEKO';
+
 // COMPTABLE : compte dédié à la facturation ESAT — n'accède qu'au module
 // facturation (jamais au prix de vente ni à la marge).
 export const ROLES = ['ADMIN', 'OPERATEUR', 'COMPTABLE'];

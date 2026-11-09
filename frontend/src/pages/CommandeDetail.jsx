@@ -9,11 +9,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Pencil, Download, Trash, ArchiveRestore, Layers, FolderOpen, Info, Check, Undo2, Truck, ListChecks,
   ScrollText, Plus, Upload, Flag, Thermometer, CircleDot, FileX, Receipt, Mail, Printer, PrinterCheck, Ban,
-  TriangleAlert, Ellipsis,
+  TriangleAlert, Ellipsis, Store,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { STATUTS, STATUT_LABELS, STATUT_CLASS } from '../constants.js';
+import { STATUTS, STATUT_LABELS, STATUT_CLASS, faiteParEcodeko } from '../constants.js';
 import { fmtDate, fmtDateTime, fmtNumber, fmtEuro, fmtRelative, echeance, plural } from '../format.js';
 import { Loading, EmptyState, usePageTitle } from '../ui/bits.jsx';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
@@ -151,6 +151,7 @@ export default function CommandeDetail() {
     else filesGeneral.push(f);
   }
   const expediee = commande.statut === 'Expédié';
+  const ecodeko = faiteParEcodeko(commande);
   const indexStatut = STATUTS.indexOf(commande.statut);
   const ech = echeance(commande);
 
@@ -289,6 +290,7 @@ export default function CommandeDetail() {
                 <span className="ref">{commande.reference}</span>
                 <StatutBadge statut={commande.statut} />
                 <Echeance commande={commande} />
+                {ecodeko && <span className="tag-ecodeko" title="Atelier ECO’DEKO : visible des admins seulement, hors facturation et hors charge de l’ESAT"><Store />Faite par ECO’DEKO</span>}
               </div>
               <h1 className="order-title">
                 {commande.client}{(commande.nom || commande.designation) && <span> · {commande.nom || commande.designation}</span>}
@@ -319,7 +321,7 @@ export default function CommandeDetail() {
             <Fait label="Date de sortie" tone={ech?.type === 'late' ? 'alert' : (ech ? 'warn' : null)}>{sortieTexte}</Fait>
             <Fait label="Commandée le">{fmtDate(commande.dateCommande)}</Fait>
             <Fait label="Atelier">{commande.atelier || '—'}</Fait>
-            <Fait label="Prix ESAT">{commande.prixEsat != null ? `${fmtEuro(commande.prixEsat)} / mug` : '—'}</Fait>
+            <Fait label="Prix ESAT">{ecodeko ? 'Hors ESAT' : (commande.prixEsat != null ? `${fmtEuro(commande.prixEsat)} / mug` : '—')}</Fait>
           </div>
 
           <div className="etapes">
@@ -406,7 +408,7 @@ export default function CommandeDetail() {
                 )}
                 <dt>Facturation ESAT</dt>
                 <dd>
-                  {commande.factureAt
+                  {ecodeko ? <span className="muted">Hors facturation (ECO’DEKO)</span> : commande.factureAt
                     ? (commande.releveId && peutFacturer
                         ? <Link to={`/facturation/releves/${commande.releveId}`}><Receipt size={13} /> Facturée le {fmtDate(commande.factureAt)}</Link>
                         : `Facturée le ${fmtDate(commande.factureAt)}`)

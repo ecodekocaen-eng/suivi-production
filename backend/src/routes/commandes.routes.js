@@ -4,11 +4,14 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireAdmin, requireProduction } from '../middleware/role.middleware.js';
+import { exigerCommandeVisible } from '../middleware/visibilite.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import * as c from '../controllers/commandes.controller.js';
 
 const router = Router();
 router.use(requireAuth, requireProduction);
+// Commande faite par ECO'DEKO : introuvable pour un non-admin.
+router.param('id', (req, res, next) => exigerCommandeVisible(req, res, next));
 
 router.get('/', asyncHandler(c.index));
 // Avant /:id pour ne pas être capturé comme un identifiant.

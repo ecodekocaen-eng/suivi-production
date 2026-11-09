@@ -13,7 +13,7 @@ import {
   FaceSlightlySmiling, FaceNeutral, FaceSlightlyFrowning, Coffee, TriangleAlert, Info, ChevronRight, ChevronDown, Gauge, RotateCcw,
 } from 'lucide-react';
 import { api } from '../api.js';
-import { CAPACITE_JOUR, STATUTS_EN_COURS } from '../constants.js';
+import { CAPACITE_JOUR, STATUTS_EN_COURS, faiteParEcodeko } from '../constants.js';
 import { planCharge } from '../charge.js';
 import { fmtNumber, plural } from '../format.js';
 import { useStoredState } from '../ui/bits.jsx';
@@ -76,7 +76,8 @@ export default function ChargeEsat({ version = 0 }) {
   useEffect(() => {
     let actif = true;
     chargerCommandesEnCours()
-      .then((items) => { if (actif) setCommandes(items); })
+      // Une commande faite par ECO'DEKO n'occupe pas l'ESAT.
+      .then((items) => { if (actif) setCommandes(items.filter((c) => !faiteParEcodeko(c))); })
       .catch(() => { if (actif) setCommandes((c) => c || []); });
     return () => { actif = false; };
   }, [version]);

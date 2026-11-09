@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { CalendarDays, ClipboardList, Euro, Flame, RotateCcw, StickyNote } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { STATUTS, STATUT_LABELS, ATELIERS } from '../constants.js';
+import { STATUTS, STATUT_LABELS, ATELIERS, ATELIER_ECODEKO, faiteParEcodeko } from '../constants.js';
 import { addJoursOuvres } from '../format.js';
 
 const PRIX_ESAT = [{ v: '0.2', label: '0,20 €' }, { v: '0.3', label: '0,30 €' }];
@@ -25,6 +25,12 @@ export default function ChampsCommande({ form, setForm, edition = false, suggest
   }, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // Faite par ECO'DEKO : pas de prix ESAT (le serveur le retire aussi).
+  const ecodeko = faiteParEcodeko(form);
+  const setAtelier = (e) => {
+    const atelier = e.target.value;
+    setForm((f) => ({ ...f, atelier, prixEsat: faiteParEcodeko({ atelier }) ? '' : f.prixEsat }));
+  };
 
   // Date de commande → date de sortie automatique, à la création.
   const onDateCommande = (e) => {
@@ -69,10 +75,14 @@ export default function ChampsCommande({ form, setForm, edition = false, suggest
           )}
           <label className="field">
             <span className="field-label">Atelier</span>
-            <input list="ateliers-suggest" value={form.atelier} onChange={set('atelier')} placeholder="LETTRAGE…" />
-            <datalist id="ateliers-suggest">
-              {ATELIERS.map((a) => <option key={a} value={a} />)}
-            </datalist>
+            <select value={form.atelier || ''} onChange={setAtelier}>
+              <option value="">—</option>
+              {ATELIERS.filter((a) => isAdmin || a !== ATELIER_ECODEKO).map((a) => (
+                <option key={a} value={a}>{a === ATELIER_ECODEKO ? 'ECO’DEKO (faite en boutique)' : a}</option>
+              ))}
+              {form.atelier && !ATELIERS.includes(form.atelier) && <option value={form.atelier}>{form.atelier}</option>}
+            </select>
+            {ecodeko && <span className="field-hint">Visible des admins seulement : l’ESAT ne la voit pas et ne la facture pas.</span>}
           </label>
         </div>
       </section>
@@ -101,6 +111,7 @@ export default function ChampsCommande({ form, setForm, edition = false, suggest
           </div>
           <div className="field">
             <span className="field-label"><Euro size={14} />Prix ESAT (par mug)</span>
+            {ecodeko ? <span className="field-hint">Faite par ECO’DEKO : pas de prix ESAT, hors facturation de l’ESAT.</span> : (
             <div className="choice-group">
               {PRIX_ESAT.map((p) => (
                 <button key={p.v} type="button" className={`choice${Number(form.prixEsat) === Number(p.v) && form.prixEsat !== '' ? ' is-active' : ''}`}
@@ -115,6 +126,7 @@ export default function ChampsCommande({ form, setForm, edition = false, suggest
                 </button>
               )}
             </div>
+            )}
           </div>
           {isAdmin && (
             <label className="field">

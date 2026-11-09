@@ -7,6 +7,12 @@ import { ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, Paperclip, Package, Cale
 import { StatutSelect, Echeance } from './Statut.jsx';
 import Thumb, { imageProduit } from './Thumb.jsx';
 import { fmtDate, fmtNumber, echeance } from '../format.js';
+import { faiteParEcodeko } from '../constants.js';
+
+// Repère d'une commande faite en boutique (hors ESAT).
+const TagEcodeko = ({ commande }) => (faiteParEcodeko(commande)
+  ? <span className="tag-ecodeko" title="Faite par ECO’DEKO : visible des admins seulement, hors facturation et hors charge de l’ESAT">ECO’DEKO</span>
+  : null);
 
 // En-tête de colonne triable.
 function Th({ label, col, sortBy, sortDir, onSort, className = '' }) {
@@ -105,7 +111,7 @@ export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, s
                   <td className="col-client">
                     <span className="cell-main cell-trunc" title={c.client}>{c.client}</span>
                     <span className="cell-sub cell-trunc" title={c.nom || ''}>
-                      {c.supprime ? 'Dans la corbeille' : (c.nom || '—')}
+                      <TagEcodeko commande={c} />{c.supprime ? 'Dans la corbeille' : (c.nom || '—')}
                     </span>
                   </td>
                   <td className="col-produit">
@@ -165,7 +171,7 @@ export default function CommandeTable({ commandes, produitsByNom = {}, sortBy, s
               </div>
               <div>
                 <span className="cell-main">{c.client}</span>
-                <span className="cell-sub">{[c.nom, c.designation].filter(Boolean).join(' · ')}</span>
+                <span className="cell-sub"><TagEcodeko commande={c} />{[c.nom, c.designation].filter(Boolean).join(' · ')}</span>
               </div>
               <div className="order-card-foot">
                 <span className="meta">

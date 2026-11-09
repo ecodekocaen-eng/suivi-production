@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from '../prisma.js';
 import { STATUTS, STATUT_EXPEDIEE } from '../constants.js';
+import { estAdmin, masqueEcodeko } from '../services/commandes.service.js';
 
 function debutPeriode(periode) {
   const now = new Date();
@@ -37,7 +38,8 @@ export async function stats(req, res) {
   }
 
   const commandes = await prisma.commande.findMany({
-    where: { supprime: false },
+    // Les commandes faites par ECO'DEKO ne comptent que pour les admins, qui seuls les voient.
+    where: { supprime: false, ...(estAdmin(req.user) ? {} : { AND: [masqueEcodeko] }) },
     select: {
       dateCommande: true, dateExpedition: true, dateLivraison: true, quantite: true,
       statut: true, client: true, typeMug: true, prixEsat: true, prixVente: true, rebut: true,

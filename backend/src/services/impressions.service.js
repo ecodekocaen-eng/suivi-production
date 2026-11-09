@@ -6,8 +6,8 @@
 import crypto from 'node:crypto';
 import { prisma } from '../prisma.js';
 import { addLog } from './log.service.js';
-import { updateCommande, typesNonComptes, apercusDesModeles } from './commandes.service.js';
-import { LOG_ACTIONS, IMPRIMANTES, IMPRIMANTE_NUMEROS } from '../constants.js';
+import { updateCommande, typesNonComptes, apercusDesModeles, masqueEcodeko, estAdmin } from './commandes.service.js';
+import { LOG_ACTIONS, IMPRIMANTES, IMPRIMANTE_NUMEROS, faiteParEcodeko } from '../constants.js';
 
 // Bornes d'un envoi.
 const QUANTITE_MAX = 2000;
@@ -68,9 +68,11 @@ export async function creerEnvoi({ imprimante, elements } = {}, user) {
   const ids = [...new Set(demandes.map((d) => d.fichierId))];
   const fichiers = await prisma.fichier.findMany({
     where: { id: { in: ids }, categorie: 'VISUEL' },
-    include: { commande: { select: { supprime: true } } },
+    include: { commande: { select: { supprime: true, atelier: true } } },
   });
-  if (fichiers.length !== ids.length) throw httpError(404, 'Visuel introuvable : il a peut-être été supprimé entre-temps.');
+  // Une commande faite par ECO'DEKO n'existe pas pour un non-admin.
+  const visibles = estAdmin(user) ? fichiers : fichiers.filter((f) => !faiteParEcodeko(f.commande));
+  if (visibles.length !== ids.length) throw httpError(404, 'Visuel introuvable : il a peut-être été supprimé entre-temps.');
   if (fichiers.some((f) => f.commande.supprime)) throw httpError(400, 'Commande à la corbeille : impression impossible.');
 
   const parId = new Map(fichiers.map((f) => [f.id, f]));
@@ -176,7 +178,7 @@ function resumeCommande(envois) {
 }
 
 // Les dernières commandes envoyées, avec tous leurs envois.
-async function envoisRecents() {
+async function envoisRecents(user) {
   const recentes = await prisma.impression.groupBy({
     by: ['commandeId'],
     _max: { createdAt: true },
@@ -186,17 +188,25 @@ async function envoisRecents() {
   const envois = await prisma.impression.findMany({
     where: { commandeId: { in: recentes.map((r) => r.commandeId) } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    include: { commande: { select: { id: true, reference: true, client: true } } },
+    include: { commande: { select: { id: true, reference: true, client: true, atelier: true } } },
   });
-  return recentes.map((r) => resumeCommande(envois.filter((e) => e.commandeId === r.commandeId)));
+  // Les commandes faites par ECO'DEKO ne sont visibles que des admins.
+  const visibles = estAdmin(user) ? envois : envois.filter((e) => !faiteParEcodeko(e.commande));
+  return recentes
+    .map((r) => visibles.filter((e) => e.commandeId === r.commandeId))
+    .filter((liste) => liste.length > 0)
+    .map(resumeCommande);
 }
 
 // Page « Impression » : commandes en attente qui ont des visuels, derniers
 // envois regroupés par commande, état du PC atelier.
-export async function fileImpression() {
+export async function fileImpression(user) {
   const [aImprimer, envois, poste] = await Promise.all([
     prisma.commande.findMany({
-      where: { supprime: false, statut: 'En attente', fichiers: { some: { categorie: 'VISUEL' } } },
+      where: {
+        supprime: false, statut: 'En attente', fichiers: { some: { categorie: 'VISUEL' } },
+        ...(estAdmin(user) ? {} : { AND: [masqueEcodeko] }),
+      },
       orderBy: [{ dateLivraison: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
       take: 100,
       select: {
@@ -214,7 +224,7 @@ export async function fileImpression() {
         },
       },
     }),
-    envoisRecents(),
+    envoisRecents(user),
     etatPoste(),
   ]);
   // Vignettes déjà prêtes (visuels de la base de données). Sans elles, le navigateur

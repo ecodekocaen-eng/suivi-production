@@ -37,7 +37,13 @@ export const TYPES_MUG = [
 ];
 
 // Ateliers courants (suggestions du champ « Atelier »).
-export const ATELIERS = ['LETTRAGE', 'CONDITIONNEMENT'];
+// Commande faite par ECO'DEKO (en boutique) et non par l'ESAT : son atelier vaut
+// ECO'DEKO, sans prix ESAT, hors facturation et hors charge de l'ESAT.
+// ⚠️ Même règle dans backend/src/constants.js.
+export const ATELIER_ECODEKO = "ECO'DEKO";
+export const faiteParEcodeko = (commande) => String(commande?.atelier ?? '').toUpperCase().replace(/[^A-Z]/g, '') === 'ECODEKO';
+
+export const ATELIERS = ['LETTRAGE', 'CONDITIONNEMENT', ATELIER_ECODEKO];
 
 // Classe CSS associée à chaque statut (couleurs définies dans styles.css).
 export const STATUT_CLASS = {

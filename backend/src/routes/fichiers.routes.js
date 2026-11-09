@@ -5,13 +5,14 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireProduction } from '../middleware/role.middleware.js';
+import { exigerCommandeVisible } from '../middleware/visibilite.middleware.js';
 import { upload as uploadMw, docUpload } from '../middleware/upload.middleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import * as f from '../controllers/fichiers.controller.js';
 
 // mergeParams: true → accès à :id de la commande parente.
 const router = Router({ mergeParams: true });
-router.use(requireAuth, requireProduction);
+router.use(requireAuth, requireProduction, exigerCommandeVisible);
 
 router.post('/', uploadMw.array('files', 20), asyncHandler(f.upload));
 // Documents (bons de commande, rendus 3D…) : types élargis, jamais purgés.

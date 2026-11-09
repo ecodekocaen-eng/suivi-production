@@ -5,7 +5,7 @@ import * as service from '../services/commandes.service.js';
 import { getLogsForCommande } from '../services/log.service.js';
 import { getReglagesForVisuels } from '../services/reglages.service.js';
 import { impressionsDeCommande } from '../services/impressions.service.js';
-import { STATUTS } from '../constants.js';
+import { STATUTS, ATELIER_ECODEKO, faiteParEcodeko } from '../constants.js';
 import { parseFrDate, parseIntSafe, parsePrice, cleanStr } from '../utils/parse.js';
 
 // Construit un objet de données validé à partir du corps de requête.
@@ -33,6 +33,12 @@ export function buildData(body, { partial = false } = {}) {
   if (!partial || body.prixEsat !== undefined) data.prixEsat = parsePrice(body.prixEsat);
   if (!partial || body.prixVente !== undefined) data.prixVente = parsePrice(body.prixVente);
   if (!partial || body.atelier !== undefined) data.atelier = cleanStr(body.atelier);
+  // Faite par ECO'DEKO : jamais de prix ESAT.
+  // Toujours la même écriture, pour que le filtre des non-admins la reconnaisse.
+  if (data.atelier !== undefined && faiteParEcodeko(data)) {
+    data.atelier = ATELIER_ECODEKO;
+    data.prixEsat = null;
+  }
   setIf('rebut', parseIntSafe(body.rebut, 0));
   if (!partial || body.noteTransport !== undefined) data.noteTransport = cleanStr(body.noteTransport);
   if (!partial || body.aFacturer !== undefined) data.aFacturer = cleanStr(body.aFacturer);
@@ -89,8 +95,9 @@ export async function index(req, res) {
       sortDir: req.query.sortDir,
       // Seul un ADMIN peut voir la corbeille.
       inclureSupprimees: req.user.role === 'ADMIN' && req.query.inclureSupprimees === 'true',
+      user: req.user,
     }),
-    service.countByStatut(),
+    service.countByStatut(req.user),
     service.typesNonComptes(),
   ]);
   const admin = req.user.role === 'ADMIN';
@@ -135,6 +142,7 @@ export async function nextReference(req, res) {
 export async function create(req, res) {
   const data = buildData(req.body);
   if (req.user.role !== 'ADMIN') delete data.prixVente; // écriture réservée ADMIN
+  await service.verifierAtelierEcodeko(data, req.user);
   // La référence est facultative : générée automatiquement si vide.
   try {
     const commande = await service.createCommande(data, req.user.id, buildLignes(req.body));
@@ -149,6 +157,7 @@ export async function create(req, res) {
 export async function update(req, res) {
   const data = buildData(req.body, { partial: true });
   if (req.user.role !== 'ADMIN') delete data.prixVente; // écriture réservée ADMIN
+  await service.verifierAtelierEcodeko(data, req.user, req.params.id);
   try {
     const commande = await service.updateCommande(req.params.id, data, req.user.id, buildLignes(req.body));
     if (!commande) return res.status(404).json({ error: 'Commande introuvable.' });

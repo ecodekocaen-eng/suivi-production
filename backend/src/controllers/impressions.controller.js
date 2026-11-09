@@ -7,7 +7,7 @@ import { envoyerFichier } from './fichiers.controller.js';
 
 // Page « Impression » : à imprimer, derniers envois, état du PC atelier.
 export async function index(req, res) {
-  res.json(await service.fileImpression());
+  res.json(await service.fileImpression(req.user));
 }
 
 export async function poste(req, res) {

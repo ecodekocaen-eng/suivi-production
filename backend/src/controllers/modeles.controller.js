@@ -228,6 +228,7 @@ export async function creerCommande(req, res) {
   // Mêmes champs qu'une commande saisie à la main.
   const data = buildData({ ...req.body, dateCommande: req.body.dateCommande || new Date().toISOString() });
   if (req.user.role !== 'ADMIN') delete data.prixVente; // écriture réservée ADMIN
+  await commandesService.verifierAtelierEcodeko(data, req.user);
   let commande;
   try {
     commande = await commandesService.createCommande(data, req.user.id, buildLignes({ lignes }));

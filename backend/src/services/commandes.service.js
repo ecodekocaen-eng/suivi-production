@@ -5,7 +5,7 @@
 import { prisma } from '../prisma.js';
 import { addLog } from './log.service.js';
 import { deleteFichiersForLigne } from './fichiers.service.js';
-import { LOG_ACTIONS, STATUT_EXPEDIEE, STATUT_LABELS } from '../constants.js';
+import { LOG_ACTIONS, STATUT_EXPEDIEE, STATUT_LABELS, ATELIER_ECODEKO, faiteParEcodeko } from '../constants.js';
 
 const STATUT_TERMINE = 'Terminé';
 
@@ -19,10 +19,11 @@ const SORTABLE = new Set([
 export async function listCommandes({
   search, statuts, livraisonDebut, livraisonFin,
   page = 1, pageSize = 20, sortBy = 'dateCommande', sortDir = 'desc',
-  inclureSupprimees = false,
+  inclureSupprimees = false, user = null,
 }) {
   const where = {};
   if (!inclureSupprimees) where.supprime = false;
+  if (!estAdmin(user)) where.AND = [masqueEcodeko];
   if (Array.isArray(statuts) && statuts.length > 0) where.statut = { in: statuts };
 
   if (search) {
@@ -104,7 +105,7 @@ export function manquesDeCommande(commande, accessoires, { admin = false } = {})
     else if (sansVisuel > 0 && !couvertes.has(null)) manques.push(`${sansVisuel} ligne${sansVisuel > 1 ? 's' : ''} sans visuel`);
   }
   if (!commande.dateSortieTexte && !commande.dateLivraison) manques.push('Date de sortie');
-  if (commande.prixEsat == null) manques.push('Prix ESAT');
+  if (commande.prixEsat == null && !faiteParEcodeko(commande)) manques.push('Prix ESAT');
   if (admin && commande.prixVente == null) manques.push('Prix de vente');
   if (lignes.length ? lignes.some((l) => !l.typeMug) : !commande.typeMug) manques.push('Type de mug');
   if (lignes.length ? lignes.some((l) => !l.quantite) : !commande.quantite) manques.push('Quantité');
@@ -175,6 +176,30 @@ export async function marquerLecture(id, lue) {
   return count > 0;
 }
 
+// Atelier ECO'DEKO (commande faite en boutique) : visible des admins seulement, pour
+// que l'ESAT ne la produise pas en double ; sans prix ESAT, hors facturation de l'ESAT.
+// L'atelier est enregistré sous la forme exacte ATELIER_ECODEKO (voir buildData).
+export const estAdmin = (user) => user?.role === 'ADMIN';
+// Filtre Prisma des commandes visibles d'un non-admin (un atelier vide reste visible).
+export const masqueEcodeko = { OR: [{ atelier: null }, { atelier: { not: ATELIER_ECODEKO } }] };
+
+// Passage à l'atelier ECO'DEKO : réservé aux admins, et refusé si l'ESAT a déjà
+// facturé la commande. `id` absent : création.
+export async function verifierAtelierEcodeko(data, user, id = null) {
+  if (data.atelier === undefined || !faiteParEcodeko(data)) return;
+  const refus = (status, message) => Object.assign(new Error(message), { status });
+  if (!estAdmin(user)) throw refus(403, 'Seul un administrateur peut attribuer une commande à ECO’DEKO.');
+  if (id == null) return;
+  const commande = await prisma.commande.findUnique({
+    where: { id: Number(id) },
+    select: { atelier: true, releveId: true, factureAt: true, releve: { select: { numero: true } } },
+  });
+  if (!commande || faiteParEcodeko(commande) || (!commande.releveId && !commande.factureAt)) return;
+  throw refus(409, commande.releve
+    ? `Déjà facturée à l’ESAT dans le relevé ${commande.releve.numero} : annulez d’abord ce relevé.`
+    : 'Déjà marquée comme facturée à l’ESAT.');
+}
+
 // Statuts pour lesquels la commande a consommé le stock (production démarrée
 // ou au-delà). Le stock se décrémente au passage « En cours de prod ».
 const STATUTS_STOCK = new Set(['En cours de prod', 'Terminé', 'Expédié']);
@@ -214,10 +239,10 @@ async function syncStock(commandeId) {
 }
 
 // Compte des commandes (non supprimées) par statut, pour le tableau de bord.
-export async function countByStatut() {
+export async function countByStatut(user = null) {
   const rows = await prisma.commande.groupBy({
     by: ['statut'],
-    where: { supprime: false },
+    where: { supprime: false, ...(estAdmin(user) ? {} : { AND: [masqueEcodeko] }) },
     _count: { _all: true },
   });
   const counts = {};

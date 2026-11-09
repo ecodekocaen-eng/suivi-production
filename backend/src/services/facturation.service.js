@@ -6,14 +6,18 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from '../prisma.js';
 import { addLog } from './log.service.js';
-import { LOG_ACTIONS } from '../constants.js';
+import { LOG_ACTIONS, faiteParEcodeko } from '../constants.js';
 
 // Champs exposés au module facturation (liste blanche : jamais prixVente).
 const factuSelect = {
   id: true, reference: true, client: true, designation: true,
   quantite: true, statut: true, dateCommande: true, dateExpedition: true,
-  prixEsat: true,
+  prixEsat: true, atelier: true,
 };
+
+// Une commande faite par ECO'DEKO n'est jamais facturée par l'ESAT. Filtre en JS :
+// en SQL, « atelier différent de ECO'DEKO » écarterait aussi les ateliers vides.
+const facturables = (commandes) => commandes.filter((c) => !faiteParEcodeko(c));
 
 const r2 = (x) => Math.round(x * 100) / 100;
 const montant = (c) => r2((c.prixEsat || 0) * (c.quantite || 0));
@@ -25,7 +29,7 @@ export async function listAFacturer() {
     select: factuSelect,
     orderBy: { dateCommande: 'desc' },
   });
-  return commandes.map((c) => ({ ...c, montant: montant(c) }));
+  return facturables(commandes).map((c) => ({ ...c, montant: montant(c) }));
 }
 
 // Numéro de relevé séquentiel par année : REL-2026-001, REL-2026-002…
@@ -52,11 +56,11 @@ export async function createReleve({ commandeIds, libelle }, userId) {
   }
 
   // On ne prend que les commandes réellement facturables (jamais deux fois).
-  const commandes = await prisma.commande.findMany({
+  const commandes = facturables(await prisma.commande.findMany({
     where: { id: { in: ids }, supprime: false, releveId: null, factureAt: null },
     select: factuSelect,
     orderBy: { dateCommande: 'asc' },
-  });
+  }));
   if (commandes.length === 0) {
     const e = new Error('Aucune commande facturable dans la sélection.'); e.status = 400; throw e;
   }
@@ -138,8 +142,12 @@ export async function exclureCommandes(commandeIds, userId) {
   if (ids.length === 0) {
     const e = new Error('Sélectionnez au moins une commande.'); e.status = 400; throw e;
   }
-  const result = await prisma.commande.updateMany({
+  const cibles = facturables(await prisma.commande.findMany({
     where: { id: { in: ids }, supprime: false, releveId: null, factureAt: null },
+    select: { id: true, atelier: true },
+  })).map((c) => c.id);
+  const result = await prisma.commande.updateMany({
+    where: { id: { in: cibles } },
     data: { factureAt: new Date() },
   });
   await addLog({
