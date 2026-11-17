@@ -6,7 +6,7 @@
 import crypto from 'node:crypto';
 import { prisma } from '../prisma.js';
 import { addLog } from './log.service.js';
-import { updateCommande, typesNonComptes, apercusDesModeles, masqueEcodeko, estAdmin } from './commandes.service.js';
+import { updateCommande, typesNonComptes, estAccessoire, apercusDesModeles, masqueEcodeko, estAdmin } from './commandes.service.js';
 import { LOG_ACTIONS, IMPRIMANTES, IMPRIMANTE_NUMEROS, faiteParEcodeko } from '../constants.js';
 
 // Bornes d'un envoi.
@@ -66,14 +66,22 @@ export async function creerEnvoi({ imprimante, elements } = {}, user) {
   if (cles.size !== demandes.length) throw httpError(400, 'Un même visuel figure deux fois sur la même imprimante.');
 
   const ids = [...new Set(demandes.map((d) => d.fichierId))];
-  const fichiers = await prisma.fichier.findMany({
-    where: { id: { in: ids }, categorie: 'VISUEL' },
-    include: { commande: { select: { supprime: true, atelier: true } } },
-  });
+  const [fichiers, accessoires] = await Promise.all([
+    prisma.fichier.findMany({
+      where: { id: { in: ids }, categorie: 'VISUEL' },
+      include: { commande: { select: { supprime: true, atelier: true } }, ligne: { select: { typeMug: true } } },
+    }),
+    typesNonComptes(),
+  ]);
   // Une commande faite par ECO'DEKO n'existe pas pour un non-admin.
   const visibles = estAdmin(user) ? fichiers : fichiers.filter((f) => !faiteParEcodeko(f.commande));
   if (visibles.length !== ids.length) throw httpError(404, 'Visuel introuvable : il a peut-être été supprimé entre-temps.');
   if (fichiers.some((f) => f.commande.supprime)) throw httpError(400, 'Commande à la corbeille : impression impossible.');
+  // Les accessoires (étiquettes…) ne passent pas sur les imprimantes de sublimation.
+  const accessoire = fichiers.find((f) => estAccessoire(f.ligne, accessoires));
+  if (accessoire) {
+    throw httpError(400, `« ${accessoire.nom} » est le visuel d’une ligne ${accessoire.ligne.typeMug} : il ne s’imprime pas en sublimation.`);
+  }
 
   const parId = new Map(fichiers.map((f) => [f.id, f]));
   const lot = crypto.randomUUID();
@@ -198,10 +206,10 @@ async function envoisRecents(user) {
     .map(resumeCommande);
 }
 
-// Page « Impression » : commandes en attente qui ont des visuels, derniers
-// envois regroupés par commande, état du PC atelier.
+// Page « Impression » : commandes en attente qui ont des visuels à sublimer (hors
+// accessoires : étiquettes…), derniers envois regroupés par commande, état du PC atelier.
 export async function fileImpression(user) {
-  const [aImprimer, envois, poste] = await Promise.all([
+  const [commandes, envois, poste, accessoires] = await Promise.all([
     prisma.commande.findMany({
       where: {
         supprime: false, statut: 'En attente', fichiers: { some: { categorie: 'VISUEL' } },
@@ -226,7 +234,14 @@ export async function fileImpression(user) {
     }),
     envoisRecents(user),
     etatPoste(),
+    typesNonComptes(),
   ]);
+  // Les visuels des lignes d'accessoires ne sont ni proposés ni comptés ; une commande
+  // qui n'a que ceux-là n'a rien à imprimer.
+  const aImprimer = commandes.map((c) => {
+    const exclues = new Set(c.lignes.filter((l) => estAccessoire(l, accessoires)).map((l) => l.id));
+    return exclues.size ? { ...c, fichiers: c.fichiers.filter((f) => !exclues.has(f.ligneId)) } : c;
+  }).filter((c) => c.fichiers.length > 0);
   // Vignettes déjà prêtes (visuels de la base de données). Sans elles, le navigateur
   // rend le PDF : un souci ici ne doit pas priver l'atelier de sa file d'impression.
   const apercus = await apercusDesModeles(aImprimer.flatMap((c) => c.fichiers)).catch((err) => {
@@ -380,15 +395,23 @@ export async function relancerCommande(commandeId, user) {
   const cibles = envoisARelancer(envois);
   if (cibles.length === 0) throw httpError(400, 'Rien à relancer sur cette commande.');
   const parties = [...new Map(cibles.map((e) => [`${e.fichierId}-${e.imprimante}`, e])).values()];
-  const fichiers = await prisma.fichier.findMany({
-    where: { id: { in: parties.map((e) => e.fichierId).filter(Boolean) } },
-    select: { id: true },
-  });
-  const existants = new Set(fichiers.map((f) => f.id));
+  const [fichiers, accessoires] = await Promise.all([
+    prisma.fichier.findMany({
+      where: { id: { in: parties.map((e) => e.fichierId).filter(Boolean) } },
+      select: { id: true, ligne: { select: { typeMug: true } } },
+    }),
+    typesNonComptes(),
+  ]);
+  // Un ancien envoi d'étiquette (accessoire) ne repart pas en sublimation.
+  const existants = new Set(fichiers.filter((f) => !estAccessoire(f.ligne, accessoires)).map((f) => f.id));
   const elements = parties.filter((e) => existants.has(e.fichierId))
     .reverse() // retrouve l'ordre de l'envoi d'origine
     .map((e) => ({ fichierId: e.fichierId, quantite: e.quantite, imprimante: e.imprimante }));
-  if (elements.length === 0) throw httpError(400, 'Les visuels n’existent plus : renvoyez-les depuis la commande.');
+  if (elements.length === 0) {
+    throw httpError(400, fichiers.length
+      ? 'Rien à relancer : ces visuels sont des accessoires (étiquettes…), qui ne s’impriment pas en sublimation.'
+      : 'Les visuels n’existent plus : renvoyez-les depuis la commande.');
+  }
   const nouveaux = await creerEnvoi({ elements }, user);
   return nouveaux.length;
 }

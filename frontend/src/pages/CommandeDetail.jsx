@@ -159,7 +159,10 @@ export default function CommandeDetail() {
   const impressions = data.impressions || [];
   const derniersEnvois = derniersEnvoisPar(impressions, (i) => i.ligneId ?? 'commande');
   const badgesEnvois = (cle) => (derniersEnvois.get(cle) || []).map((i) => <ImpressionBadge impression={i} key={i.id} />);
-  const peutImprimer = visuels.length > 0 && !commande.supprime;
+  // Les visuels des accessoires (étiquettes…) ne passent pas en sublimation.
+  const lignesAccessoires = new Set((commande.lignes || []).filter((l) => l.accessoire).map((l) => l.id));
+  const aSublimer = visuels.filter((f) => !lignesAccessoires.has(f.ligneId));
+  const peutImprimer = aSublimer.length > 0 && !commande.supprime;
   // « Imprimer » est l'action principale tant que la commande attend son impression.
   const imprimerEnAvant = peutImprimer && commande.statut === 'En attente';
 
@@ -239,7 +242,7 @@ export default function CommandeDetail() {
   // commande ; et les visuels éventuels non rattachés à une ligne à la fin.
   const decrireLigne = (l) => {
     const produit = produitsByNom[l.typeMug];
-    const accessoire = produit?.compteMugs === false;
+    const accessoire = l.accessoire ?? produit?.compteMugs === false;
     const fichiers = l.fichiers;
     return {
       ...l,
@@ -497,7 +500,7 @@ export default function CommandeDetail() {
       )}
       {impression && (
         <ImpressionModal
-          commandes={[{ ...commande, impressions }]}
+          commandes={[{ ...commande, fichiers: aSublimer, impressions }]}
           apercus={apercus}
           onClose={() => setImpression(false)}
           onSent={load}

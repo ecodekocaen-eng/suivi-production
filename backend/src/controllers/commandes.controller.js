@@ -130,7 +130,10 @@ export async function show(req, res) {
     console.error('Vignettes des modèles indisponibles :', err.message);
     return {};
   });
-  const manques = service.manquesDeCommande(commande, await service.typesNonComptes(), { admin: req.user.role === 'ADMIN' });
+  const accessoires = await service.typesNonComptes();
+  const manques = service.manquesDeCommande(commande, accessoires, { admin: req.user.role === 'ADMIN' });
+  // Lignes d'accessoires (étiquettes…) signalées : leurs visuels ne partent pas à l'impression.
+  commande.lignes = (commande.lignes || []).map((l) => ({ ...l, accessoire: service.estAccessoire(l, accessoires) }));
   res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions, apercus, manques });
 }
 

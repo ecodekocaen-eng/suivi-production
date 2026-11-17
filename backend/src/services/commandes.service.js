@@ -138,6 +138,10 @@ export async function typesNonComptes() {
   return new Set(rows.map((r) => r.nom.trim().toUpperCase()));
 }
 
+// Ligne d'accessoire (étiquette…) : ni comptée en mugs, ni imprimée en sublimation.
+// `accessoires` : voir typesNonComptes.
+export const estAccessoire = (ligne, accessoires) => accessoires.has((ligne?.typeMug || '').trim().toUpperCase());
+
 // Dérive les champs d'en-tête (quantité totale, type, désignation) à partir des lignes,
 // pour que le tableau, la recherche et les stats restent cohérents.
 // Les lignes de produits « non comptés » (étiquettes…) n'entrent ni dans la
