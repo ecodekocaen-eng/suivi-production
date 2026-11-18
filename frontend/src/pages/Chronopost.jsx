@@ -110,9 +110,10 @@ export default function Chronopost() {
     finally { setBusy(null); }
   };
 
+  // Essaie le contrat avec le mot de passe tapé (sans l'enregistrer), sinon avec celui enregistré.
   const tester = async () => {
     setBusy('tester'); setPrix(null); setErreur(null);
-    try { setPrix(await api.post('/chronopost/tester')); }
+    try { setPrix(await api.post('/chronopost/tester', motDePasse ? { compte: form.compte, motDePasse } : {})); }
     catch (err) { setErreur(err.message); }
     finally { setBusy(null); }
   };
@@ -174,14 +175,14 @@ export default function Chronopost() {
               </label>
             </div>
             <div className="row">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={tester} disabled={busy != null || modifie}
-                      title={modifie ? 'Enregistrez d’abord vos changements' : 'Calcule le prix d’un colis de 1 kg vers Paris : rien n’est créé'}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={tester} disabled={busy != null}
+                      title="Calcule le prix d’un colis de 1 kg vers Paris avec ce compte : rien n’est créé ni enregistré">
                 {busy === 'tester' ? <LoaderCircle className="spin" /> : <PlugZap />}Tester la connexion
               </button>
               {prix && (
                 <span className="badge badge-success"><Check />{prix.compte === 'essai'
                   ? 'Compte d’essai de Chronopost joint (il ne donne pas de prix)'
-                  : `Contrat OK · ${prix.produit}, 1 kg vers Paris : ${prix.montantHT.toFixed(2).replace('.', ',')} € HT`}</span>
+                  : `Contrat OK · ${prix.produit}, 1 kg vers Paris : ${prix.montantHT.toFixed(2).replace('.', ',')} € HT${prix.enregistre ? '' : ' — cliquez sur Enregistrer pour garder le mot de passe'}`}</span>
               )}
             </div>
           </div>

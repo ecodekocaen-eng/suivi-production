@@ -109,13 +109,33 @@ export async function enregistrerReglages(req, res) {
   res.json(await etatReglages());
 }
 
-// Essai de connexion : prix d'un colis de 1 kg de l'atelier vers Paris (compte de test en mode
-// Test, contrat sinon). Rien n'est créé.
+// Essai de connexion : prix d'un colis de 1 kg de l'atelier vers Paris. Rien n'est créé ni enregistré.
+// On essaie le contrat, quel que soit le mode : avec le mot de passe tapé (pas encore enregistré) s'il y
+// en a un, sinon celui enregistré ; à défaut seulement, le compte d'essai de Chronopost en mode Test.
 export async function tester(req, res) {
   const r = await reglages.lireReglages();
-  const acces = r.etat === 'test' ? reglages.COMPTE_ESSAI_CHRONOPOST : await reglages.accesContrat(r);
-  const prix = await prixChronopost({ depart: r.expediteurs.atelier.cp || '14000', arrivee: '75001', poids: 1, produit: r.produit }, acces);
-  res.json({ ...prix, compte: r.etat === 'test' ? 'essai' : 'contrat', produit: reglages.PRODUITS_CHRONOPOST[r.produit] });
+  const tape = typeof req.body?.motDePasse === 'string' ? req.body.motDePasse.trim() : '';
+  let acces;
+  let type = 'contrat';
+  if (tape) {
+    const compte = String(req.body?.compte ?? r.compte).replace(/\s/g, '');
+    if (!/^\d{8}$/.test(compte)) throw erreur(400, 'Numéro de compte Chronopost : 8 chiffres.');
+    acces = { compte, motDePasse: tape };
+  } else if (r.compte && await reglages.motDePasse()) {
+    acces = await reglages.accesContrat(r);
+  } else if (r.etat === 'test') {
+    acces = reglages.COMPTE_ESSAI_CHRONOPOST;
+    type = 'essai';
+  } else {
+    throw erreur(409, 'Saisissez le compte et le mot de passe pour tester le contrat.');
+  }
+  let prix;
+  try {
+    prix = await prixChronopost({ depart: r.expediteurs.atelier.cp || '14000', arrivee: '75001', poids: 1, produit: r.produit }, acces);
+  } catch (err) {
+    throw erreur(err.status === 502 ? 502 : 409, type === 'contrat' ? `Chronopost refuse ce compte ou ce mot de passe : ${err.message}` : err.message);
+  }
+  res.json({ ...prix, compte: type, enregistre: !tape, produit: reglages.PRODUITS_CHRONOPOST[r.produit] });
 }
 
 // Nouvelle clé de l'agent de la Zebra : montrée une seule fois, à copier sur le PC atelier.
