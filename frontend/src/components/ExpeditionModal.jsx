@@ -2,7 +2,9 @@
 //  Fenêtre « Nouvelle expédition » (admins) : départ de l'atelier (étiquettes
 //  Chronopost sur la Zebra), de l'ESAT (PDF à imprimer là-bas) ou palette / autre
 //  transporteur (étiquette reçue en PDF, importée). Destinataire prérempli par la
-//  dernière étiquette Chronopost du même client ; un poids par carton.
+//  dernière étiquette Chronopost du même client ; un poids par carton. Expéditeur
+//  imprimé : l'atelier, ou un expéditeur particulier proposé d'après le client
+//  (ex. OBJETRAMA) — jamais l'ESAT.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import { Truck, Printer, FileDown, Upload, Package, MapPin, LoaderCircle, TriangleAlert, Info, FlaskConical } from 'lucide-react';
@@ -32,6 +34,8 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
   const [depart, setDepart] = useState(faiteParEcodeko(commande) ? 'ATELIER' : 'ESAT');
   const [chrono, setChrono] = useState(null); // réglages Chronopost (mode, adresses de départ)
   const [dest, setDest] = useState(null);
+  const [expediteur, setExpediteur] = useState('atelier');
+  const [expediteurPropose, setExpediteurPropose] = useState('atelier');
   const [nbColis, setNbColis] = useState('1');
   const [poidsCommun, setPoidsCommun] = useState('');
   const [poidsDifferents, setPoidsDifferents] = useState(false);
@@ -45,7 +49,11 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
   useEffect(() => {
     api.get('/chronopost').then((d) => setChrono(d.reglages)).catch(() => setChrono({ etat: 'inconnu' }));
     api.get(`/commandes/${commande.id}/expeditions/destinataire`)
-      .then((d) => setDest({ ...ADRESSE, ...d.destinataire }))
+      .then((d) => {
+        setDest({ ...ADRESSE, ...d.destinataire });
+        setExpediteur(d.expediteur || 'atelier');
+        setExpediteurPropose(d.expediteur || 'atelier');
+      })
       .catch(() => setDest({ ...ADRESSE, nom: commande.client }));
   }, [commande.id, commande.client]);
 
@@ -67,8 +75,12 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
   const chronopost = depart !== 'AUTRE';
   const arrete = chronopost && chrono && chrono.etat !== 'test' && chrono.etat !== 'reel';
   const essai = chronopost && chrono?.etat === 'test';
-  const depuis = chrono?.expediteurs?.[depart === 'ESAT' ? 'esat' : 'atelier'];
-  const departIncomplet = chronopost && chrono?.expediteurs && (!adresseComplete(depuis) || !adresseComplete(chrono.expediteurs.atelier));
+  // Expéditeurs possibles : l'atelier (habituel) et les expéditeurs particuliers des réglages.
+  const atelier = chrono?.expediteurs?.atelier;
+  const particuliers = chrono?.expediteurs?.particuliers || [];
+  const expediteurs = [{ id: 'atelier', adresse: atelier }, ...particuliers.map((p) => ({ id: p.id, adresse: p }))];
+  const choisi = expediteurs.find((x) => x.id === expediteur)?.adresse;
+  const departIncomplet = chronopost && atelier && (!adresseComplete(atelier) || (choisi && !adresseComplete(choisi)));
 
   const envoyer = async (e) => {
     e.preventDefault();
@@ -93,7 +105,7 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
     setBusy(true);
     try {
       const { expedition } = await api.post(`/commandes/${commande.id}/expeditions/chronopost`, {
-        depart, destinataire: dest, colis: valeurs, reference,
+        depart, destinataire: dest, colis: valeurs, reference, expediteur,
       });
       toast.success(depart === 'ATELIER'
         ? <>{plural(n, 'étiquette')} {n > 1 ? 'envoyées' : 'envoyée'} <strong>sur la Zebra</strong></>
@@ -149,10 +161,27 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
             <span>Mode Test : étiquette « SPECIMEN » sur le compte d’essai de Chronopost, rien n’est facturé ni expédié.</span>
           </div>
         )}
+        {chronopost && atelier && (
+          <label className="field expe-expediteur">
+            <span className="field-label">Expéditeur sur l’étiquette</span>
+            <select value={expediteur} onChange={(e) => { setErreur(null); setExpediteur(e.target.value); }}>
+              {expediteurs.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.id === 'atelier' ? `Atelier · ${x.adresse?.nom || 'à régler'}` : x.adresse.nom}{x.adresse?.ville ? ` (${x.adresse.ville})` : ''}
+                </option>
+              ))}
+            </select>
+            <span className="field-hint">
+              {expediteurPropose !== 'atelier' && expediteur === expediteurPropose
+                ? <>Choisi automatiquement pour le client {commande.client}.</>
+                : 'L’ESAT n’apparaît jamais comme expéditeur.'}
+            </span>
+          </label>
+        )}
         {departIncomplet && !arrete && (
           <div className="alert alert-warning">
             <TriangleAlert />
-            <span>Adresse de départ {depart === 'ESAT' ? 'de l’ESAT' : 'de l’atelier'} à compléter (avec le téléphone) dans <Link to="/chronopost">Administration › Chronopost</Link>.</span>
+            <span>Adresse de l’expéditeur à compléter (avec le téléphone) dans <Link to="/chronopost">Administration › Chronopost</Link>.</span>
           </div>
         )}
       </section>

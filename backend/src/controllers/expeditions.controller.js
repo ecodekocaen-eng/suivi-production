@@ -10,8 +10,9 @@ const erreur = (status, message) => Object.assign(new Error(message), { status }
 
 // ── Fiche commande ────────────────────────────────────────────
 
+// Préremplissage de la fenêtre : dernière adresse du client, expéditeur proposé pour ce client.
 export async function destinataire(req, res) {
-  res.json({ destinataire: await service.dernierDestinataire(req.params.id) });
+  res.json(await service.preparation(req.params.id));
 }
 
 export async function creerChronopost(req, res) {
@@ -51,8 +52,9 @@ export async function lireReglages(req, res) {
   res.json(await etatReglages());
 }
 
-// { etat, compte, sousCompte, produit, expediteurs: { atelier, esat }, motDePasse? }. Un nouveau mot de
-// passe n'est gardé qu'une fois accepté par Chronopost (calcul d'un prix, rien n'est créé).
+// { etat, compte, sousCompte, produit, expediteurs: { atelier, particuliers: [{ id?, clients, …adresse }] },
+// motDePasse? }. Un nouveau mot de passe n'est gardé qu'une fois accepté par Chronopost (calcul d'un
+// prix, rien n'est créé).
 export async function enregistrerReglages(req, res) {
   const b = req.body || {};
   const actuels = await reglages.lireReglages();
@@ -72,9 +74,17 @@ export async function enregistrerReglages(req, res) {
     maj.produit = b.produit;
   }
   if (b.expediteurs !== undefined) {
+    const liste = Array.isArray(b.expediteurs?.particuliers) ? b.expediteurs.particuliers : actuels.expediteurs.particuliers;
+    if (liste.length > reglages.PARTICULIERS_MAX) throw erreur(400, `${reglages.PARTICULIERS_MAX} expéditeurs particuliers au plus.`);
+    const particuliers = liste.map(reglages.particulierNet);
+    for (const p of particuliers) {
+      if (!reglages.adresseComplete(p) || !p.telephone) {
+        throw erreur(400, `Expéditeur particulier « ${p.nom || 'sans nom'} » : société, adresse, code postal, ville et téléphone.`);
+      }
+    }
     maj.expediteurs = {
       atelier: reglages.adresseNette(b.expediteurs?.atelier ?? actuels.expediteurs.atelier),
-      esat: reglages.adresseNette(b.expediteurs?.esat ?? actuels.expediteurs.esat),
+      particuliers,
     };
   }
   const futurs = { ...actuels, ...maj };

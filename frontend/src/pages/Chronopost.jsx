@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────
 //  Administration › Chronopost : étiquettes d'expédition du suivi des mugs sur
 //  le contrat Chronopost d'Objetlia. Mode (Arrêté / Test / Réel), compte et mot
-//  de passe du service web (saisis ici par un admin, jamais réaffichés), adresses
-//  de départ (atelier, ESAT) et clé de l'agent de la Zebra du PC atelier.
+//  de passe du service web (saisis ici par un admin, jamais réaffichés), expéditeurs
+//  (atelier habituel, particuliers comme OBJETRAMA ; jamais l’ESAT) et clé de l’agent de la Zebra.
 // ─────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from 'react';
-import { Truck, KeyRound, MapPin, Printer, LoaderCircle, PlugZap, Save, Copy, TriangleAlert, Check, Info } from 'lucide-react';
+import { Truck, KeyRound, MapPin, Printer, LoaderCircle, PlugZap, Save, Copy, TriangleAlert, Check, Info, Plus, Trash } from 'lucide-react';
 import { api } from '../api.js';
 import { fmtDateTime, fmtRelative } from '../format.js';
 import { PageHeader, Loading, Segmented, usePageTitle } from '../ui/bits.jsx';
@@ -33,13 +33,24 @@ const CHAMPS = [
 ];
 // Agent vu depuis moins de 2 minutes : en ligne (il passe toutes les 15 s, noté au plus une fois par minute).
 const EN_LIGNE_MS = 2 * 60 * 1000;
+const PARTICULIERS_MAX = 10;
+const ADRESSE_VIDE = { nom: '', contact: '', adresse1: '', adresse2: '', cp: '', ville: '', pays: 'FR', telephone: '', email: '' };
 
-function Adresse({ titre, sous, valeur, onChange }) {
+function Adresse({ titre, sous, valeur, onChange, onRetirer = null }) {
   return (
     <section className="form-section">
-      <h3 className="form-section-title"><MapPin />{titre}</h3>
+      <h3 className="form-section-title"><MapPin />{titre}
+        {onRetirer && <button type="button" className="btn btn-ghost btn-xs expe-retirer" onClick={onRetirer}><Trash />Retirer</button>}
+      </h3>
       {sous && <p className="field-hint">{sous}</p>}
       <div className="form-grid">
+        {onRetirer && (
+          <label className="field field-full">
+            <span className="field-label">Clients concernés</span>
+            <input value={valeur.clients || ''} onChange={(e) => onChange({ ...valeur, clients: e.target.value })} placeholder="ex : OBJETRAMA" />
+            <span className="field-hint">Choisi tout seul quand le nom du client de la commande contient un de ces noms (plusieurs : séparés par des virgules).</span>
+          </label>
+        )}
         {CHAMPS.map((c) => (
           <label className={`field${c.full ? ' field-full' : ''}`} key={c.k}>
             <span className="field-label">{c.label}{c.req && <span className="req"> *</span>}</span>
@@ -74,6 +85,10 @@ export default function Chronopost() {
 
   const set = (k, v) => { setErreur(null); setForm((f) => ({ ...f, [k]: v })); };
   const setAdresse = (qui, v) => { setErreur(null); setForm((f) => ({ ...f, expediteurs: { ...f.expediteurs, [qui]: v } })); };
+  const setParticuliers = (maj) => { setErreur(null); setForm((f) => ({ ...f, expediteurs: { ...f.expediteurs, particuliers: maj(f.expediteurs.particuliers) } })); };
+  const setParticulier = (i, v) => setParticuliers((liste) => liste.map((p, j) => (j === i ? v : p)));
+  const retirerParticulier = (i) => setParticuliers((liste) => liste.filter((_, j) => j !== i));
+  const ajouterParticulier = () => setParticuliers((liste) => [...liste, { ...ADRESSE_VIDE, clients: '' }]);
 
   const enregistrer = async (e) => {
     e?.preventDefault();
@@ -173,12 +188,22 @@ export default function Chronopost() {
         </div>
 
         <div className="card">
-          <div className="card-header"><h2 className="card-title"><MapPin />Adresses de départ</h2></div>
+          <div className="card-header"><h2 className="card-title"><MapPin />Expéditeurs</h2></div>
           <div className="card-body adresses-depart">
-            <Adresse titre="Atelier" sous="Départ des étiquettes imprimées sur la Zebra. C’est aussi l’adresse du titulaire du contrat."
+            <Adresse titre="Atelier · expéditeur habituel"
+                     sous="Imprimé sur les étiquettes, qu’elles partent de l’atelier ou de l’ESAT : l’ESAT n’apparaît jamais. C’est aussi le titulaire du contrat."
                      valeur={form.expediteurs.atelier} onChange={(v) => setAdresse('atelier', v)} />
-            <Adresse titre="ESAT" sous="Départ des étiquettes en PDF imprimées à l’ESAT : elle figure comme expéditeur."
-                     valeur={form.expediteurs.esat} onChange={(v) => setAdresse('esat', v)} />
+            {form.expediteurs.particuliers.map((p, i) => (
+              <Adresse key={p.id || `nouveau-${i}`} titre={`Expéditeur particulier · ${p.nom || 'nouveau'}`}
+                       sous="Imprimé à la place de l’atelier pour les clients ci-dessous (modifiable dans la fenêtre d’étiquette)."
+                       valeur={p} onChange={(v) => setParticulier(i, v)} onRetirer={() => retirerParticulier(i)} />
+            ))}
+            <div className="field-full">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={ajouterParticulier}
+                      disabled={form.expediteurs.particuliers.length >= PARTICULIERS_MAX}>
+                <Plus />Ajouter un expéditeur particulier
+              </button>
+            </div>
           </div>
         </div>
 

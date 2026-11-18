@@ -267,6 +267,7 @@ model Expedition {
   reference     String? // référence imprimée sur l'étiquette
   nbColis       Int       @default(1)
   destinataire  String? // JSON : { nom, contact, adresse1, adresse2, cp, ville, pays, telephone, email }
+  expediteur    String? // JSON : { id, nom, cp, ville } de l'expéditeur imprimé (atelier ou particulier)
   suivi         String? // numéro de suivi d'une étiquette importée
   fichierChemin String? // PDF importé (AUTRE)
   fichierNom    String?

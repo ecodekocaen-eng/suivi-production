@@ -13,6 +13,7 @@ import { addLog } from './log.service.js';
 import { LOG_ACTIONS } from '../constants.js';
 import {
   lireReglages, accesChronopost, accesContrat, adresseNette, adresseComplete, PRODUITS_CHRONOPOST,
+  particulierPourClient, expediteurChoisi,
 } from './chronopost/reglages.js';
 import { creerEtiquettes, annulerEtiquette, versZebra, assembler, texteChrono } from './chronopost/etiquettes.js';
 
@@ -35,10 +36,11 @@ export async function expeditionsDeCommande(commandeId) {
     orderBy: { createdAt: 'desc' },
     include: { colis: { orderBy: { rang: 'asc' } } },
   });
-  return liste.map(({ fichierChemin, destinataire, colis, ...e }) => ({
+  return liste.map(({ fichierChemin, destinataire, expediteur, colis, ...e }) => ({
     ...e,
     produitNom: e.produit ? (PRODUITS_CHRONOPOST[e.produit] || e.produit) : null,
     destinataire: lireJson(destinataire),
+    expediteur: lireJson(expediteur),
     fichier: Boolean(fichierChemin),
     colis: colis.map(({ etiquetteChemin, ...c }) => c),
   }));
@@ -66,21 +68,30 @@ async function trouverExpedition(commandeId, id) {
   return e;
 }
 
-// Adresse de la dernière étiquette Chronopost faite pour ce client (préremplit la suivante).
-export async function dernierDestinataire(commandeId) {
+// Préremplissage de la fenêtre : adresse de la dernière étiquette Chronopost faite pour ce client,
+// et expéditeur proposé (« atelier », ou l'expéditeur particulier de ce client, ex. OBJETRAMA).
+export async function preparation(commandeId) {
   const commande = await trouverCommande(commandeId);
-  const e = await prisma.expedition.findFirst({
-    where: { transporteur: 'Chronopost', destinataire: { not: null }, commande: { client: commande.client } },
-    orderBy: { createdAt: 'desc' },
-    select: { destinataire: true },
-  });
-  return lireJson(e?.destinataire) || { ...adresseNette({}), nom: commande.client };
+  const [e, r] = await Promise.all([
+    prisma.expedition.findFirst({
+      where: { transporteur: 'Chronopost', destinataire: { not: null }, commande: { client: commande.client } },
+      orderBy: { createdAt: 'desc' },
+      select: { destinataire: true },
+    }),
+    lireReglages(),
+  ]);
+  return {
+    destinataire: lireJson(e?.destinataire) || { ...adresseNette({}), nom: commande.client },
+    expediteur: particulierPourClient(r, commande.client)?.id || 'atelier',
+  };
 }
 
 // Une seule création à la fois par commande (double clic = une seule étiquette).
 const enCours = new Set();
 
-// Étiquettes Chronopost : { depart: 'ATELIER' | 'ESAT', destinataire, colis: [poids en kg], reference? }.
+// Étiquettes Chronopost : { depart: 'ATELIER' | 'ESAT', destinataire, colis: [poids en kg], reference?,
+// expediteur? ('atelier' ou id d'un particulier ; absent : choisi d'après le client) }. Le départ ne
+// change que l'impression (Zebra ou PDF) : l'ESAT n'est jamais l'expéditeur.
 export async function creerChronopost(commandeId, corps, user) {
   const commande = await trouverCommande(commandeId);
   if (commande.supprime) throw erreur(400, 'Commande à la corbeille : pas d’étiquette.');
@@ -101,10 +112,14 @@ export async function creerChronopost(commandeId, corps, user) {
   const r = await lireReglages();
   const acces = await accesChronopost(r);
   const titulaire = r.expediteurs.atelier;
-  const expediteur = depart === 'ESAT' ? r.expediteurs.esat : titulaire;
-  for (const [a, nom] of [[titulaire, 'de l’atelier'], [expediteur, NOMS_DEPART[depart]]]) {
+  const choix = expediteurChoisi(r, corps?.expediteur, commande.client);
+  if (!choix) throw erreur(400, 'Expéditeur inconnu : rechargez la page.');
+  const expediteur = choix.adresse;
+  const aVerifier = [[titulaire, 'de l’atelier']];
+  if (choix.id !== 'atelier') aVerifier.push([expediteur, `de l’expéditeur « ${expediteur.nom || 'sans nom'} »`]);
+  for (const [a, nom] of aVerifier) {
     if (!adresseComplete(a) || !a.telephone) {
-      throw erreur(409, `Adresse d’expédition ${nom} à compléter (nom, rue, code postal, ville, téléphone) dans Administration › Chronopost.`);
+      throw erreur(409, `Adresse ${nom} à compléter (nom, rue, code postal, ville, téléphone) dans Administration › Chronopost.`);
     }
   }
   const reference = texteChrono(corps?.reference || commande.reference) || commande.reference;
@@ -128,13 +143,15 @@ export async function creerChronopost(commandeId, corps, user) {
       const expedition = await prisma.expedition.create({
         data: {
           commandeId: commande.id, depart, transporteur: 'Chronopost', produit: r.produit, essai: acces.essai, reference,
-          nbColis: poids.length, destinataire: JSON.stringify(destinataire), creeParId: user.id, creeParNom: user.nom,
+          nbColis: poids.length, destinataire: JSON.stringify(destinataire),
+          expediteur: JSON.stringify({ id: choix.id, nom: expediteur.nom, cp: expediteur.cp, ville: expediteur.ville }),
+          creeParId: user.id, creeParNom: user.nom,
           colis: { create: colis },
         },
       });
       await addLog({
         action: LOG_ACTIONS.EXPEDITION_CREEE,
-        detail: `Étiquette${poids.length > 1 ? 's' : ''} Chronopost${acces.essai ? ' d’essai (SPECIMEN)' : ''} : ${pluriel(poids.length, 'carton')} au départ ${NOMS_DEPART[depart]}${depart === 'ATELIER' ? ' (Zebra)' : ' (PDF)'} · ${suivis.join(', ')}`,
+        detail: `Étiquette${poids.length > 1 ? 's' : ''} Chronopost${acces.essai ? ' d’essai (SPECIMEN)' : ''} : ${pluriel(poids.length, 'carton')} au départ ${NOMS_DEPART[depart]}${depart === 'ATELIER' ? ' (Zebra)' : ' (PDF)'}${choix.id !== 'atelier' ? `, expéditeur ${expediteur.nom}` : ''} · ${suivis.join(', ')}`,
         userId: user.id,
         commandeId: commande.id,
       });

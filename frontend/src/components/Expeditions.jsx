@@ -67,6 +67,9 @@ function Expedition({ commandeId, e, isAdmin, onChange }) {
         <span className="cell-sub expe-quand" title={fmtDateTime(e.createdAt)}>{fmtRelative(e.createdAt)}{e.creeParNom && ` · ${e.creeParNom}`}</span>
       </div>
       {d && <div className="cell-sub">{[d.nom, [d.cp, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}</div>}
+      {e.expediteur && e.expediteur.id !== 'atelier' && (
+        <div className="cell-sub">Expéditeur : <strong>{e.expediteur.nom}</strong></div>
+      )}
       {chronopost ? (
         <ul className="expe-colis">
           {(e.colis || []).map((c) => (

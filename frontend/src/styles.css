@@ -1226,3 +1226,5 @@ body.has-modal { overflow: hidden; }
 .adresses-depart { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
 .adresses-depart > .form-section + .form-section { margin-top: 0; padding-top: 0; border-top: 0; }
 @media (max-width: 1100px) { .adresses-depart { grid-template-columns: 1fr; } }
+.expe-retirer { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.expe-expediteur { max-width: 460px; }

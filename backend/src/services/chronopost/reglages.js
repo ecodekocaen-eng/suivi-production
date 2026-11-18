@@ -1,7 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 //  Réglages Chronopost du suivi des mugs (18/11/2026) : contrat d'Objetlia (compte et mot de
-//  passe du service web, saisis par un admin), mode Arrêté / Test / Réel, adresses d'expédition
-//  de l'atelier et de l'ESAT. Table Parametre (clé → valeur) :
+//  passe du service web, saisis par un admin), mode Arrêté / Test / Réel, expéditeurs.
+//  L'ESAT n'est JAMAIS l'expéditeur (décision de Théo) : l'étiquette porte l'adresse de l'atelier
+//  (expéditeur habituel, titulaire du contrat), ou celle d'un expéditeur particulier choisi tout
+//  seul d'après le client de la commande (ex. OBJETRAMA). Table Parametre (clé → valeur) :
 //   - « chronopost » : tout ce qui n'est pas secret (JSON) ;
 //   - « chronopost.motDePasse » : le mot de passe, chiffré (AES-256-GCM, clé tirée de JWT_SECRET),
 //     jamais renvoyé au navigateur ;
@@ -37,9 +39,44 @@ export const adresseNette = (a = {}) => Object.fromEntries(CHAMPS_ADRESSE.map((k
 // Adresse utilisable sur une étiquette : nom, rue, code postal, ville.
 export const adresseComplete = (a) => Boolean(a?.nom && a.adresse1 && a.cp && a.ville);
 
+// ── Expéditeurs particuliers (ex. OBJETRAMA) ──────────────────
+export const PARTICULIERS_MAX = 10;
+// Clé de comparaison d'un nom de client : majuscules, sans accents, espaces ni ponctuation.
+export const cleClient = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .toUpperCase().replace(/[^A-Z0-9]/g, '');
+// Noms de clients d'un expéditeur particulier : séparés par des virgules, points-virgules ou retours à la ligne.
+export const motsClients = (texte) => String(texte || '').split(/[,;\n]/).map(cleClient).filter((m) => m.length >= 3);
+
+// Expéditeur particulier tel qu'enregistré : identifiant stable, noms de clients, adresse.
+export const particulierNet = (p = {}) => ({
+  id: /^exp-[a-z0-9]{4,20}$/.test(p?.id) ? p.id : `exp-${crypto.randomBytes(4).toString('hex')}`,
+  clients: String(p?.clients ?? '').trim().slice(0, 200),
+  ...adresseNette(p),
+});
+
+// Expéditeur particulier du client de la commande (son nom contient un des noms donnés), sinon null.
+export function particulierPourClient(r, client) {
+  const cle = cleClient(client);
+  if (!cle) return null;
+  return r.expediteurs.particuliers.find((p) => motsClients(p.clients).some((m) => cle.includes(m))) || null;
+}
+
+// Expéditeur imprimé : « atelier », l'identifiant d'un particulier, ou rien (choix automatique d'après
+// le client). Renvoie { id, adresse }, ou null pour un identifiant inconnu.
+export function expediteurChoisi(r, id, client) {
+  if (!id) {
+    const p = particulierPourClient(r, client);
+    return p ? { id: p.id, adresse: p } : { id: 'atelier', adresse: r.expediteurs.atelier };
+  }
+  if (id === 'atelier') return { id: 'atelier', adresse: r.expediteurs.atelier };
+  const p = r.expediteurs.particuliers.find((x) => x.id === id);
+  return p ? { id: p.id, adresse: p } : null;
+}
+
 export async function lireReglages() {
   let lu = {};
   try { lu = JSON.parse((await lire(CLE)) || '{}') || {}; } catch { /* pas encore réglé */ }
+  const particuliers = Array.isArray(lu.expediteurs?.particuliers) ? lu.expediteurs.particuliers : [];
   return {
     etat: ETATS_CHRONOPOST.includes(lu.etat) ? lu.etat : 'off',
     compte: lu.compte || '',
@@ -47,7 +84,7 @@ export async function lireReglages() {
     produit: PRODUITS_CHRONOPOST[lu.produit] ? lu.produit : '01',
     expediteurs: {
       atelier: { ...ADRESSE_VIDE, ...(lu.expediteurs?.atelier || {}) },
-      esat: { ...ADRESSE_VIDE, ...(lu.expediteurs?.esat || {}) },
+      particuliers: particuliers.slice(0, PARTICULIERS_MAX).map((p, i) => ({ ...ADRESSE_VIDE, ...p, id: p.id || `exp-${i + 1}`, clients: p.clients || '' })),
     },
   };
 }

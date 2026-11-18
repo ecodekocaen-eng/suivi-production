@@ -106,6 +106,7 @@ export async function ensureSchema() {
       "reference" TEXT,
       "nbColis" INTEGER NOT NULL DEFAULT 1,
       "destinataire" TEXT,
+      "expediteur" TEXT,
       "suivi" TEXT,
       "fichierChemin" TEXT,
       "fichierNom" TEXT,
