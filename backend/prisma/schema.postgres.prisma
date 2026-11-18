@@ -80,6 +80,7 @@ model Commande {
   logs        Log[]
   lignes      LigneCommande[]
   impressions Impression[]
+  expeditions Expedition[]
 
   @@index([statut])
   @@index([client])
@@ -241,4 +242,61 @@ model PosteImpression {
   version     String?
   imprimantes String? // JSON : [{ code, libelle }]
   derniereVue DateTime @default(now())
+}
+
+// Expéditions d'une commande (18/11/2026) : étiquettes Chronopost sur le contrat d'Objetlia, faites
+// au départ de l'atelier (Zebra) ou de l'ESAT (PDF A4), ou étiquette d'un autre transporteur
+// (palette…) importée en PDF. ⚠️ Tables créées au démarrage en production (bootstrap.js › ensureSchema).
+model Expedition {
+  id            Int       @id @default(autoincrement())
+  commande      Commande  @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  commandeId    Int
+  depart        String // ATELIER | ESAT (Chronopost) | AUTRE (étiquette importée)
+  transporteur  String // « Chronopost » ou celui de l'étiquette importée
+  produit       String? // code produit Chronopost (01 = Chrono 13)
+  essai         Boolean   @default(false) // compte de TEST de Chronopost : « SPECIMEN », rien de facturé
+  statut        String    @default("CREEE") // CREEE | ANNULEE
+  reference     String? // référence imprimée sur l'étiquette
+  nbColis       Int       @default(1)
+  destinataire  String? // JSON : { nom, contact, adresse1, adresse2, cp, ville, pays, telephone, email }
+  suivi         String? // numéro de suivi d'une étiquette importée
+  fichierChemin String? // PDF importé (AUTRE)
+  fichierNom    String?
+  creeParId     Int?
+  creeParNom    String?
+  annuleAt      DateTime?
+  annuleParNom  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  colis         Colis[]
+
+  @@index([commandeId])
+}
+
+// Un carton d'une expédition Chronopost : numéro de suivi, étiquette et, au départ de l'atelier,
+// passage sur la Zebra (agent du PC atelier, /api/print-jobs).
+model Colis {
+  id              Int        @id @default(autoincrement())
+  expedition      Expedition @relation(fields: [expeditionId], references: [id], onDelete: Cascade)
+  expeditionId    Int
+  rang            Int
+  suivi           String
+  poids           Float
+  etiquetteChemin String // PDF de Chronopost : THE (atelier, Zebra) ou PDF A4 (ESAT)
+  impression      String? // EN_FILE | IMPRIME | ERREUR (départ atelier seulement)
+  message         String?
+  imprimeAt       DateTime?
+  annuleAt        DateTime? // annulé chez Chronopost
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([expeditionId])
+  @@index([impression])
+}
+
+// Réglages clé → valeur : Chronopost (JSON), son mot de passe (chiffré), clé de l'agent de la Zebra.
+model Parametre {
+  cle       String   @id
+  valeur    String
+  updatedAt DateTime @updatedAt
 }

@@ -22,6 +22,7 @@ import UploadZone from '../components/UploadZone.jsx';
 import { imageProduit } from '../components/Thumb.jsx';
 import { LigneProduction, PanneauLigne } from '../components/LigneProduction.jsx';
 import DocumentsList from '../components/DocumentsList.jsx';
+import Expeditions from '../components/Expeditions.jsx';
 import CommandeFormModal from '../components/CommandeFormModal.jsx';
 import ImpressionModal from '../components/ImpressionModal.jsx';
 import { ImpressionBadge, derniersEnvoisPar } from '../components/ImpressionEtat.jsx';
@@ -50,6 +51,10 @@ const EVENEMENTS = {
   IMPRESSION_TERMINEE: { Icone: PrinterCheck, cls: 'is-status' },
   IMPRESSION_ERREUR: { Icone: TriangleAlert, cls: 'is-danger' },
   IMPRESSION_ANNULEE: { Icone: Ban },
+  EXPEDITION_CREEE: { Icone: Truck, cls: 'is-status' },
+  ETIQUETTE_IMPORTEE: { Icone: Truck, cls: 'is-file' },
+  ETIQUETTES_RENVOYEES: { Icone: Printer, cls: 'is-file' },
+  EXPEDITION_ANNULEE: { Icone: Ban },
 };
 
 function Fait({ label, tone = null, children }) {
@@ -387,6 +392,9 @@ export default function CommandeDetail() {
         </div>
 
         <aside className="detail-side">
+          {/* Expédition : étiquettes Chronopost (atelier, ESAT) ou importées (palette…) */}
+          <Expeditions commande={commande} expeditions={data.expeditions || []} isAdmin={isAdmin} onChange={load} />
+
           {/* Détails */}
           <div className="card">
             <div className="card-header is-fin"><h2 className="card-title"><ListChecks />Détails</h2></div>

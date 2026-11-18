@@ -93,6 +93,62 @@ export async function ensureSchema() {
         ALTER TABLE "Impression" ADD CONSTRAINT "Impression_commandeId_fkey" FOREIGN KEY ("commandeId") REFERENCES "Commande"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END $$`);
+
+    // Expéditions (étiquettes Chronopost ou importées), leurs cartons, et les réglages clé → valeur.
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Expedition" (
+      "id" SERIAL NOT NULL,
+      "commandeId" INTEGER NOT NULL,
+      "depart" TEXT NOT NULL,
+      "transporteur" TEXT NOT NULL,
+      "produit" TEXT,
+      "essai" BOOLEAN NOT NULL DEFAULT false,
+      "statut" TEXT NOT NULL DEFAULT 'CREEE',
+      "reference" TEXT,
+      "nbColis" INTEGER NOT NULL DEFAULT 1,
+      "destinataire" TEXT,
+      "suivi" TEXT,
+      "fichierChemin" TEXT,
+      "fichierNom" TEXT,
+      "creeParId" INTEGER,
+      "creeParNom" TEXT,
+      "annuleAt" TIMESTAMP(3),
+      "annuleParNom" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "Expedition_pkey" PRIMARY KEY ("id")
+    )`);
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Colis" (
+      "id" SERIAL NOT NULL,
+      "expeditionId" INTEGER NOT NULL,
+      "rang" INTEGER NOT NULL,
+      "suivi" TEXT NOT NULL,
+      "poids" DOUBLE PRECISION NOT NULL,
+      "etiquetteChemin" TEXT NOT NULL,
+      "impression" TEXT,
+      "message" TEXT,
+      "imprimeAt" TIMESTAMP(3),
+      "annuleAt" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "Colis_pkey" PRIMARY KEY ("id")
+    )`);
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Parametre" (
+      "cle" TEXT NOT NULL,
+      "valeur" TEXT NOT NULL,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "Parametre_pkey" PRIMARY KEY ("cle")
+    )`);
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "Expedition_commandeId_idx" ON "Expedition"("commandeId")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "Colis_expeditionId_idx" ON "Colis"("expeditionId")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "Colis_impression_idx" ON "Colis"("impression")');
+    await prisma.$executeRawUnsafe(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Expedition_commandeId_fkey') THEN
+        ALTER TABLE "Expedition" ADD CONSTRAINT "Expedition_commandeId_fkey" FOREIGN KEY ("commandeId") REFERENCES "Commande"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Colis_expeditionId_fkey') THEN
+        ALTER TABLE "Colis" ADD CONSTRAINT "Colis_expeditionId_fkey" FOREIGN KEY ("expeditionId") REFERENCES "Expedition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+    END $$`);
     schemaOk = true;
   } catch (err) {
     console.error('Création des tables manquantes :', err.message);

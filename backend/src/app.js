@@ -29,6 +29,9 @@ import cronRoutes from './routes/cron.routes.js';
 import modelesRoutes from './routes/modeles.routes.js';
 import impressionsRoutes from './routes/impressions.routes.js';
 import agentRoutes from './routes/agent.routes.js';
+import expeditionsRoutes from './routes/expeditions.routes.js';
+import chronopostRoutes from './routes/chronopost.routes.js';
+import printJobsRoutes from './routes/printJobs.routes.js';
 
 export function createApp() {
   const app = express();
@@ -67,11 +70,15 @@ export function createApp() {
   app.use('/api/cron', cronRoutes);
   // Sous-routes fichiers (déclarées avant pour le préfixe plus spécifique).
   app.use('/api/commandes/:id/fichiers', fichiersRoutes);
+  app.use('/api/commandes/:id/expeditions', expeditionsRoutes);
   app.use('/api/commandes', commandesRoutes);
+  app.use('/api/chronopost', chronopostRoutes);
   app.use('/api/modeles', modelesRoutes);
   app.use('/api/impressions', impressionsRoutes);
   // Agent d'impression du PC atelier : jeton dédié, pas de session.
   app.use('/api/agent', agentRoutes);
+  // Agent de la Zebra (PC atelier) : étiquettes Chronopost au départ de l'atelier, clé dédiée.
+  app.use('/api/print-jobs', printJobsRoutes);
 
   // En production, sert le frontend React compilé (déploiement mono-port).
   // Le build est attendu dans frontend/dist (voir Dockerfile / README).

@@ -19,7 +19,7 @@ function useMedia(requete) {
 import { Routes, Route, Navigate, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   ClipboardList, Printer, Thermometer, Database, ChartColumn, Receipt, Building, Coffee, UserCog,
-  LogOut, PanelLeftClose, PanelLeftOpen, Menu,
+  LogOut, PanelLeftClose, PanelLeftOpen, Menu, Truck,
 } from 'lucide-react';
 import { useAuth } from './auth.jsx';
 import { ROLE_LABELS } from './constants.js';
@@ -38,6 +38,7 @@ import BaseModeles from './pages/BaseModeles.jsx';
 import Facturation from './pages/Facturation.jsx';
 import ReleveDetail from './pages/ReleveDetail.jsx';
 import Users from './pages/Users.jsx';
+import Chronopost from './pages/Chronopost.jsx';
 
 // Page d'accueil selon le rôle.
 const homeFor = (user) => (user?.role === 'COMPTABLE' ? '/facturation' : '/');
@@ -83,6 +84,7 @@ function sectionsPour(user) {
       liens: admin ? [
         { to: '/clients', label: 'Clients', icon: Building },
         { to: '/produits', label: 'Produits', icon: Coffee },
+        { to: '/chronopost', label: 'Chronopost', icon: Truck },
         { to: '/utilisateurs', label: 'Utilisateurs', icon: UserCog },
       ] : [],
     },
@@ -193,6 +195,7 @@ export default function App() {
       <Route path="/clients" element={<Protected roles={['ADMIN']}><Clients /></Protected>} />
       <Route path="/produits" element={<Protected roles={['ADMIN']}><Produits /></Protected>} />
       <Route path="/utilisateurs" element={<Protected roles={['ADMIN']}><Users /></Protected>} />
+      <Route path="/chronopost" element={<Protected roles={['ADMIN']}><Chronopost /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

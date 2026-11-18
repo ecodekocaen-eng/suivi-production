@@ -1198,3 +1198,31 @@ body.has-modal { overflow: hidden; }
   .table th { background: #f3f3f3 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .releve-head { border-bottom-color: #8a2b36; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── Expédition (fiche commande) : étiquettes Chronopost et importées ── */
+.expe-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.expe { display: flex; flex-direction: column; gap: .35rem; padding: .7rem 0; border-top: 1px solid var(--border); }
+.expe:first-child { border-top: 0; padding-top: .1rem; }
+.expe:last-child { padding-bottom: 0; }
+.expe.is-annulee { opacity: .6; }
+.expe-tete { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .9rem; }
+.expe-quand { margin: 0 0 0 auto; }
+.expe-colis { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; font-size: .84rem; }
+.expe-colis li { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) auto auto; align-items: center; gap: .5rem; }
+.expe-colis li.is-annule .mono { text-decoration: line-through; color: var(--muted); }
+.expe-colis a { display: inline-flex; align-items: center; gap: .2rem; overflow: hidden; text-overflow: ellipsis; }
+.expe-colis a svg { width: 12px; height: 12px; flex: none; }
+.expe-actions { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .15rem; }
+.expe-departs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.expe-depart { justify-content: flex-start; text-align: left; padding: .65rem .8rem; height: auto; }
+.expe-depart strong { display: block; }
+.expe-poids { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: .6rem .8rem; margin-top: .6rem; }
+.check-line { display: inline-flex; align-items: center; gap: .45rem; font-size: .88rem; margin-top: .7rem; cursor: pointer; }
+.cle-agent { word-break: break-all; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: .25rem .45rem; }
+@media (max-width: 640px) {
+  .expe-departs { grid-template-columns: 1fr; }
+}
+.field > .segmented { align-self: flex-start; }
+.adresses-depart { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.adresses-depart > .form-section + .form-section { margin-top: 0; padding-top: 0; border-top: 0; }
+@media (max-width: 1100px) { .adresses-depart { grid-template-columns: 1fr; } }
