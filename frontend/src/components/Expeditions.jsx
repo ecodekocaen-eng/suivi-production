@@ -107,10 +107,29 @@ function Expedition({ commandeId, e, isAdmin, onChange }) {
   );
 }
 
-export default function Expeditions({ commande, expeditions, isAdmin, onChange }) {
+// Adresse de livraison saisie sur la commande (formulaire ou bon de commande du client).
+function LivrerA({ livraison }) {
+  const d = livraison?.destinataire;
+  const exp = livraison?.expediteur;
+  if (!d?.nom && !d?.ville && !exp && !livraison?.refClient) return null;
+  return (
+    <div className="expe-livrer">
+      {(d?.nom || d?.ville) && (
+        <div><span className="muted">Livrer à</span> <strong>{d.nom}</strong>{d.contact && ` · ${d.contact}`}
+          <div className="cell-sub">{[d.adresse1, d.adresse2, [d.cp, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</div>
+        </div>
+      )}
+      {exp?.id === 'commande' && <div className="cell-sub">Expéditeur : <strong>{exp.adresse?.nom}</strong></div>}
+      {livraison.refClient && <div className="cell-sub">Commande du client : <span className="mono">{livraison.refClient}</span></div>}
+    </div>
+  );
+}
+
+export default function Expeditions({ commande, expeditions, livraison = null, isAdmin, onChange }) {
   const [nouvelle, setNouvelle] = useState(false);
   const actives = expeditions.filter((e) => e.statut !== 'ANNULEE').length;
-  if (!isAdmin && expeditions.length === 0) return null;
+  const aLivraison = Boolean(livraison?.destinataire?.nom || livraison?.destinataire?.ville);
+  if (!isAdmin && expeditions.length === 0 && !aLivraison) return null;
 
   return (
     <div className="card">
@@ -121,6 +140,7 @@ export default function Expeditions({ commande, expeditions, isAdmin, onChange }
         )}
       </div>
       <div className="card-body is-fin">
+        <LivrerA livraison={livraison} />
         {expeditions.length === 0
           ? <p className="muted small">Aucune étiquette pour l’instant.</p>
           : (

@@ -25,6 +25,9 @@ const router = Router({ mergeParams: true });
 router.use(requireAuth, requireProduction, exigerCommandeVisible);
 
 router.get('/destinataire', requireAdmin, asyncHandler(c.destinataire));
+// Adresse de livraison et expéditeur saisis sur la commande (garder un expéditeur : admins, voir le service).
+router.get('/livraison', asyncHandler(c.lireLivraison));
+router.put('/livraison', asyncHandler(c.enregistrerLivraison));
 router.post('/chronopost', requireAdmin, asyncHandler(c.creerChronopost));
 router.post('/import', requireAdmin, importPdf.single('fichier'), asyncHandler(c.importer));
 router.get('/:eid/pdf', asyncHandler(c.pdf));

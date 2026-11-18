@@ -36,6 +36,8 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
   const [dest, setDest] = useState(null);
   const [expediteur, setExpediteur] = useState('atelier');
   const [expediteurPropose, setExpediteurPropose] = useState('atelier');
+  const [expediteurCommande, setExpediteurCommande] = useState(null); // expéditeur propre à la commande
+  const [depuisCommande, setDepuisCommande] = useState(false); // adresse saisie sur la commande
   const [nbColis, setNbColis] = useState('1');
   const [poidsCommun, setPoidsCommun] = useState('');
   const [poidsDifferents, setPoidsDifferents] = useState(false);
@@ -53,6 +55,8 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
         setDest({ ...ADRESSE, ...d.destinataire });
         setExpediteur(d.expediteur || 'atelier');
         setExpediteurPropose(d.expediteur || 'atelier');
+        setExpediteurCommande(d.expediteurCommande || null);
+        setDepuisCommande(Boolean(d.depuisCommande));
       })
       .catch(() => setDest({ ...ADRESSE, nom: commande.client }));
   }, [commande.id, commande.client]);
@@ -78,7 +82,11 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
   // Expéditeurs possibles : l'atelier (habituel) et les expéditeurs particuliers des réglages.
   const atelier = chrono?.expediteurs?.atelier;
   const particuliers = chrono?.expediteurs?.particuliers || [];
-  const expediteurs = [{ id: 'atelier', adresse: atelier }, ...particuliers.map((p) => ({ id: p.id, adresse: p }))];
+  const expediteurs = [
+    { id: 'atelier', adresse: atelier },
+    ...particuliers.map((p) => ({ id: p.id, adresse: p })),
+    ...(expediteurCommande ? [{ id: 'commande', adresse: expediteurCommande }] : []),
+  ];
   const choisi = expediteurs.find((x) => x.id === expediteur)?.adresse;
   const departIncomplet = chronopost && atelier && (!adresseComplete(atelier) || (choisi && !adresseComplete(choisi)));
 
@@ -167,13 +175,14 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
             <select value={expediteur} onChange={(e) => { setErreur(null); setExpediteur(e.target.value); }}>
               {expediteurs.map((x) => (
                 <option key={x.id} value={x.id}>
-                  {x.id === 'atelier' ? `Atelier · ${x.adresse?.nom || 'à régler'}` : x.adresse.nom}{x.adresse?.ville ? ` (${x.adresse.ville})` : ''}
+                  {x.id === 'atelier' ? `Atelier · ${x.adresse?.nom || 'à régler'}` : (x.id === 'commande' ? `Propre à la commande · ${x.adresse.nom}` : x.adresse.nom)}
+                  {x.adresse?.ville ? ` (${x.adresse.ville})` : ''}
                 </option>
               ))}
             </select>
             <span className="field-hint">
               {expediteurPropose !== 'atelier' && expediteur === expediteurPropose
-                ? <>Choisi automatiquement pour le client {commande.client}.</>
+                ? (expediteur === 'commande' ? 'Expéditeur saisi sur la commande.' : <>Choisi pour la commande ou le client {commande.client}.</>)
                 : 'L’ESAT n’apparaît jamais comme expéditeur.'}
             </span>
           </label>
@@ -226,7 +235,9 @@ export default function ExpeditionModal({ commande, onClose, onCreated }) {
                 </label>
               </div>
             )}
-            <p className="field-hint"><Info />Livraison en France. L’adresse est retenue pour les prochaines étiquettes de ce client.</p>
+            <p className="field-hint"><Info />{depuisCommande
+              ? 'Adresse de livraison saisie sur la commande. Livraison en France.'
+              : 'Livraison en France. L’adresse est retenue pour les prochaines étiquettes de ce client.'}</p>
           </section>
 
           <section className="form-section">

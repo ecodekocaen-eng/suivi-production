@@ -13,7 +13,7 @@ import { addLog } from './log.service.js';
 import { LOG_ACTIONS } from '../constants.js';
 import {
   lireReglages, accesChronopost, accesContrat, adresseNette, adresseComplete, PRODUITS_CHRONOPOST,
-  particulierPourClient, expediteurChoisi,
+  particulierPourClient, expediteurChoisi, memoriserParticulier,
 } from './chronopost/reglages.js';
 import { creerEtiquettes, annulerEtiquette, versZebra, assembler, texteChrono } from './chronopost/etiquettes.js';
 
@@ -68,21 +68,112 @@ async function trouverExpedition(commandeId, id) {
   return e;
 }
 
-// Préremplissage de la fenêtre : adresse de la dernière étiquette Chronopost faite pour ce client,
-// et expéditeur proposé (« atelier », ou l'expéditeur particulier de ce client, ex. OBJETRAMA).
+// ── Livraison de la commande : adresse et expéditeur, saisis à la création ou lus dans son PDF ──
+
+// Expéditeur noté sur la commande : { id } (« atelier » ou un particulier), { id: 'commande', adresse }
+// pour un expéditeur propre à cette commande, ou null (choisi d'après le client).
+function lireExpediteurCommande(v) {
+  if (!v) return null;
+  if (String(v).startsWith('{')) {
+    const adresse = lireJson(v);
+    return adresse ? { id: 'commande', adresse } : null;
+  }
+  return { id: v };
+}
+
+export async function livraisonDeCommande(commandeId) {
+  const l = await prisma.livraison.findUnique({ where: { commandeId: Number(commandeId) } });
+  if (!l) return null;
+  return {
+    destinataire: lireJson(l.destinataire),
+    expediteur: lireExpediteurCommande(l.expediteur),
+    refClient: l.refClient,
+    source: l.source,
+    updatedAt: l.updatedAt,
+  };
+}
+
+const adresseVide = (a) => !a || Object.entries(a).every(([k, v]) => k === 'pays' || !String(v ?? '').trim());
+const paysNet = (p) => (!String(p || '').trim() || /^(FR|FRANCE)$/i.test(String(p).trim()) ? 'FR' : String(p).trim().toUpperCase().slice(0, 30));
+
+// { destinataire?, expediteur?: null | 'atelier' | id d'un particulier | { adresse, memoriser }, refClient?, source? }.
+// « memoriser » : l'expéditeur rejoint les expéditeurs particuliers, pour ce client (admins seulement).
+export async function enregistrerLivraison(commandeId, corps, user) {
+  const commande = await trouverCommande(commandeId);
+  let destinataire = null;
+  if (!adresseVide(corps?.destinataire)) {
+    destinataire = { ...adresseNette(corps.destinataire), pays: paysNet(corps.destinataire.pays) };
+    if (destinataire.pays === 'FR' && destinataire.cp && !/^\d{5}$/.test(destinataire.cp.replace(/\s/g, ''))) {
+      throw erreur(400, 'Code postal de livraison : 5 chiffres.');
+    }
+  }
+  let expediteur = null;
+  let memorise = null;
+  const e = corps?.expediteur;
+  if (e && typeof e === 'object') {
+    const adresse = { ...adresseNette(e.adresse), pays: paysNet(e.adresse?.pays) };
+    if (!adresseComplete(adresse) || !adresse.telephone) throw erreur(400, 'Expéditeur : société, adresse, code postal, ville et téléphone.');
+    if (e.memoriser) {
+      if (user.role !== 'ADMIN') throw erreur(403, 'Seul un administrateur peut garder un expéditeur en mémoire.');
+      expediteur = await memoriserParticulier(adresse, commande.client);
+      memorise = adresse.nom;
+    } else {
+      expediteur = JSON.stringify(adresse);
+    }
+  } else if (e === 'atelier') {
+    expediteur = 'atelier';
+  } else if (typeof e === 'string' && e) {
+    const r = await lireReglages();
+    if (!r.expediteurs.particuliers.some((p) => p.id === e)) throw erreur(400, 'Expéditeur inconnu : rechargez la page.');
+    expediteur = e;
+  }
+  const data = {
+    destinataire: destinataire ? JSON.stringify(destinataire) : null,
+    expediteur,
+    refClient: String(corps?.refClient ?? '').trim().slice(0, 60) || null,
+    source: String(corps?.source ?? '').trim().slice(0, 200) || null,
+  };
+  const avant = await prisma.livraison.findUnique({ where: { commandeId: commande.id } });
+  if (Object.values(data).every((v) => v == null)) {
+    if (avant) await prisma.livraison.delete({ where: { commandeId: commande.id } });
+    return null;
+  }
+  const inchange = avant && Object.keys(data).every((k) => (avant[k] ?? null) === data[k]);
+  if (!inchange) {
+    await prisma.livraison.upsert({ where: { commandeId: commande.id }, create: { commandeId: commande.id, ...data }, update: data });
+    await addLog({
+      action: LOG_ACTIONS.LIVRAISON_MODIFIEE,
+      detail: `Livraison : ${destinataire ? `${destinataire.nom}, ${destinataire.cp} ${destinataire.ville}`.trim() : 'sans adresse'}`
+        + `${data.source ? ` (lue dans ${data.source})` : ''}${memorise ? ` · expéditeur ${memorise} gardé en mémoire` : ''}`,
+      userId: user.id,
+      commandeId: commande.id,
+    });
+  }
+  return livraisonDeCommande(commande.id);
+}
+
+// Préremplissage de la fenêtre d'étiquette : adresse de livraison de la commande, sinon celle de la
+// dernière étiquette Chronopost du même client ; expéditeur noté sur la commande, sinon l'expéditeur
+// particulier de ce client (ex. OBJETRAMA), sinon l'atelier.
 export async function preparation(commandeId) {
   const commande = await trouverCommande(commandeId);
-  const [e, r] = await Promise.all([
+  const [e, r, liv] = await Promise.all([
     prisma.expedition.findFirst({
       where: { transporteur: 'Chronopost', destinataire: { not: null }, commande: { client: commande.client } },
       orderBy: { createdAt: 'desc' },
       select: { destinataire: true },
     }),
     lireReglages(),
+    livraisonDeCommande(commande.id),
   ]);
+  const deLaCommande = !adresseVide(liv?.destinataire) ? liv.destinataire : null;
+  const note = liv?.expediteur?.id;
+  const noteValable = note === 'atelier' || note === 'commande' || r.expediteurs.particuliers.some((p) => p.id === note);
   return {
-    destinataire: lireJson(e?.destinataire) || { ...adresseNette({}), nom: commande.client },
-    expediteur: particulierPourClient(r, commande.client)?.id || 'atelier',
+    destinataire: deLaCommande || lireJson(e?.destinataire) || { ...adresseNette({}), nom: commande.client },
+    depuisCommande: Boolean(deLaCommande),
+    expediteur: (noteValable && note) || particulierPourClient(r, commande.client)?.id || 'atelier',
+    expediteurCommande: note === 'commande' ? liv.expediteur.adresse : null,
   };
 }
 
@@ -112,7 +203,12 @@ export async function creerChronopost(commandeId, corps, user) {
   const r = await lireReglages();
   const acces = await accesChronopost(r);
   const titulaire = r.expediteurs.atelier;
-  const choix = expediteurChoisi(r, corps?.expediteur, commande.client);
+  // Expéditeur demandé, sinon celui noté sur la commande, sinon d'après le client.
+  const liv = await livraisonDeCommande(commande.id);
+  const demande = corps?.expediteur || liv?.expediteur?.id || null;
+  const choix = demande === 'commande'
+    ? (liv?.expediteur?.id === 'commande' ? { id: 'commande', adresse: liv.expediteur.adresse } : null)
+    : expediteurChoisi(r, demande, commande.client);
   if (!choix) throw erreur(400, 'Expéditeur inconnu : rechargez la page.');
   const expediteur = choix.adresse;
   const aVerifier = [[titulaire, 'de l’atelier']];

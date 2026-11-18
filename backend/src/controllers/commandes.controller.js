@@ -5,7 +5,7 @@ import * as service from '../services/commandes.service.js';
 import { getLogsForCommande } from '../services/log.service.js';
 import { getReglagesForVisuels } from '../services/reglages.service.js';
 import { impressionsDeCommande } from '../services/impressions.service.js';
-import { expeditionsDeCommande } from '../services/expeditions.service.js';
+import { expeditionsDeCommande, livraisonDeCommande } from '../services/expeditions.service.js';
 import { STATUTS, ATELIER_ECODEKO, faiteParEcodeko } from '../constants.js';
 import { parseFrDate, parseIntSafe, parsePrice, cleanStr } from '../utils/parse.js';
 
@@ -136,11 +136,17 @@ export async function show(req, res) {
   // Lignes d'accessoires (étiquettes…) signalées : leurs visuels ne partent pas à l'impression.
   commande.lignes = (commande.lignes || []).map((l) => ({ ...l, accessoire: service.estAccessoire(l, accessoires) }));
   // Étiquettes d'expédition (Chronopost ou importées) : la fiche s'ouvre même si elles manquent.
-  const expeditions = await expeditionsDeCommande(commande.id).catch((err) => {
-    console.error('Expéditions indisponibles :', err.message);
-    return [];
-  });
-  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions, apercus, manques, expeditions });
+  const [expeditions, livraison] = await Promise.all([
+    expeditionsDeCommande(commande.id).catch((err) => {
+      console.error('Expéditions indisponibles :', err.message);
+      return [];
+    }),
+    livraisonDeCommande(commande.id).catch((err) => {
+      console.error('Livraison indisponible :', err.message);
+      return null;
+    }),
+  ]);
+  res.json({ commande: masquerMarge(commande, req.user.role), logs, reglages, impressions, apercus, manques, expeditions, livraison });
 }
 
 // Prochaine référence disponible (pour préremplir le formulaire).

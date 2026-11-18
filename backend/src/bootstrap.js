@@ -150,6 +150,21 @@ export async function ensureSchema() {
         ALTER TABLE "Colis" ADD CONSTRAINT "Colis_expeditionId_fkey" FOREIGN KEY ("expeditionId") REFERENCES "Expedition"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       END IF;
     END $$`);
+    // Adresse de livraison et expéditeur d'une commande (1 ligne par commande).
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Livraison" (
+      "commandeId" INTEGER NOT NULL,
+      "destinataire" TEXT,
+      "expediteur" TEXT,
+      "refClient" TEXT,
+      "source" TEXT,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "Livraison_pkey" PRIMARY KEY ("commandeId")
+    )`);
+    await prisma.$executeRawUnsafe(`DO $ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Livraison_commandeId_fkey') THEN
+        ALTER TABLE "Livraison" ADD CONSTRAINT "Livraison_commandeId_fkey" FOREIGN KEY ("commandeId") REFERENCES "Commande"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+    END $`);
     schemaOk = true;
   } catch (err) {
     console.error('Création des tables manquantes :', err.message);

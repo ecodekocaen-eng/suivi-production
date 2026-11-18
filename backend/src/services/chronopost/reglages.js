@@ -61,6 +61,39 @@ export function particulierPourClient(r, client) {
   return r.expediteurs.particuliers.find((p) => motsClients(p.clients).some((m) => cle.includes(m))) || null;
 }
 
+// Garde un expéditeur en mémoire pour un client (case « Garder cet expéditeur » de la commande) :
+// l'expéditeur particulier de même nom est mis à jour et reçoit ce client, sinon un nouveau est créé.
+// Renvoie son identifiant.
+export async function memoriserParticulier(adresse, client) {
+  const r = await lireReglages();
+  const cle = cleClient(adresse.nom);
+  const motClient = String(client || '').trim();
+  const existant = r.expediteurs.particuliers.find((p) => cleClient(p.nom) === cle);
+  let particuliers;
+  let id;
+  if (existant) {
+    const deja = motsClients(existant.clients).includes(cleClient(motClient));
+    const clients = deja || !motClient ? existant.clients : [existant.clients, motClient].filter(Boolean).join(', ');
+    id = existant.id;
+    particuliers = r.expediteurs.particuliers.map((p) => (p.id === id ? particulierNet({ ...p, ...adresseNette(adresse), clients }) : p));
+  } else {
+    if (r.expediteurs.particuliers.length >= PARTICULIERS_MAX) {
+      throw Object.assign(new Error(`${PARTICULIERS_MAX} expéditeurs particuliers au plus : retirez-en un dans Administration › Chronopost.`), { status: 409 });
+    }
+    const nouveau = particulierNet({ ...adresseNette(adresse), clients: motClient });
+    id = nouveau.id;
+    particuliers = [...r.expediteurs.particuliers, nouveau];
+  }
+  await ecrireReglages({ expediteurs: { ...r.expediteurs, particuliers } });
+  return id;
+}
+
+// Expéditeurs proposés dans les formulaires (sans téléphone ni e-mail) : l'atelier puis les particuliers.
+export function listeExpediteurs(r) {
+  const court = (id, a) => ({ id, nom: a.nom, ville: a.ville, clients: a.clients || '' });
+  return [court('atelier', r.expediteurs.atelier), ...r.expediteurs.particuliers.map((p) => court(p.id, p))];
+}
+
 // Expéditeur imprimé : « atelier », l'identifiant d'un particulier, ou rien (choix automatique d'après
 // le client). Renvoie { id, adresse }, ou null pour un identifiant inconnu.
 export function expediteurChoisi(r, id, client) {

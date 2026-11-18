@@ -13,6 +13,7 @@ import { addJoursOuvres, aujourdhuiISO, fmtNumber } from '../format.js';
 import Modal from '../ui/Modal.jsx';
 import { useConfirm, useToast } from '../ui/feedback.jsx';
 import ChampsCommande, { ChampNotes, JOURS_OUVRES_SORTIE } from './ChampsCommande.jsx';
+import ChampsLivraison, { livraisonInitiale, payloadLivraison, livraisonRemplie, verifierLivraison } from './ChampsLivraison.jsx';
 import LignesEditor, { ligneVide, totauxLignes } from './LignesEditor.jsx';
 import { envoyerFichiers, verifierTailles } from '../televersement.js';
 
@@ -59,9 +60,10 @@ function lignesInitiales(commande) {
 }
 
 // Empreinte de la saisie (hors référence auto), pour détecter une modification.
-const empreinte = (form, lignes) => JSON.stringify({
+const empreinte = (form, lignes, livraison) => JSON.stringify({
   form: { ...form, reference: undefined },
   lignes: lignes.map((l) => ({ ...l, files: (l.files || []).map((f) => f.name) })),
+  livraison: { ...payloadLivraison(livraison), pdf: livraison.pdf?.name || null },
 });
 
 export default function CommandeFormModal({ commande = null, onClose, onSaved }) {
@@ -71,11 +73,13 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
 
   const [form, setForm] = useState(() => formInitial(commande));
   const [lignes, setLignes] = useState(() => lignesInitiales(commande));
+  const [livraison, setLivraison] = useState(() => livraisonInitiale(commande?.livraison));
   const [produits, setProduits] = useState([]);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { ligne, total, percent } pendant l'upload
-  const depart = useRef(empreinte(formInitial(commande), lignesInitiales(commande)));
+  const depart = useRef(empreinte(formInitial(commande), lignesInitiales(commande), livraisonInitiale(commande?.livraison)));
+  const livraisonDepart = useRef(JSON.stringify(payloadLivraison(livraisonInitiale(commande?.livraison))));
 
   useEffect(() => {
     api.get('/produits').then((d) => setProduits(d.produits)).catch(() => {});
@@ -89,7 +93,7 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
 
   const produitsByNom = useMemo(() => Object.fromEntries(produits.map((p) => [p.nom, p])), [produits]);
   const { mugs } = totauxLignes(lignes, produitsByNom);
-  const modifie = empreinte(form, lignes) !== depart.current;
+  const modifie = empreinte(form, lignes, livraison) !== depart.current;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -123,8 +127,22 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
 
     // Fichier trop gros : on le signale AVANT de créer la commande.
     await verifierTailles(utiles.flatMap((l) => l.files));
+    const joindre = livraison.pdf && livraison.joindre ? [livraison.pdf] : [];
+    if (joindre.length) await verifierTailles(joindre);
 
     const { commande: creee } = await api.post('/commandes', { ...form, lignes: payloadLignes });
+
+    // Livraison et bon de commande : la commande existe déjà, un échec ici est signalé sans l'annuler.
+    const problemes = [];
+    if (livraisonRemplie(livraison)) {
+      await api.put(`/commandes/${creee.id}/expeditions/livraison`, payloadLivraison(livraison))
+        .catch((err) => problemes.push(`l’adresse de livraison n’a pas été enregistrée (${err.message})`));
+    }
+    if (joindre.length) {
+      await envoyerFichiers({ commandeId: creee.id, categorie: 'document', files: joindre })
+        .catch((err) => problemes.push(`le bon de commande n’a pas été joint (${err.message})`));
+    }
+    if (problemes.length) toast.error(`Commande ${creee.reference} créée, mais ${problemes.join(' et ')}. Complétez-la depuis la fiche.`);
 
     // Upload des visuels sur leur ligne respective (créées dans le même ordre), à
     // plusieurs à la fois. La commande existe déjà : un envoi en échec n'arrête pas
@@ -166,12 +184,20 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
 
   const enregistrer = async () => {
     await api.patch(`/commandes/${commande.id}`, { ...form, lignes: lignes.map(({ files, ...l }) => l) });
+    if (JSON.stringify(payloadLivraison(livraison)) !== livraisonDepart.current) {
+      await api.put(`/commandes/${commande.id}/expeditions/livraison`, payloadLivraison(livraison));
+    }
+    if (livraison.pdf && livraison.joindre) {
+      await envoyerFichiers({ commandeId: commande.id, categorie: 'document', files: [livraison.pdf] });
+    }
     onSaved();
   };
 
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
+    const pbLivraison = verifierLivraison(livraison);
+    if (pbLivraison) { setError(pbLivraison); return; }
     setBusy(true);
     try {
       if (edition) await enregistrer(); else await creer();
@@ -214,6 +240,8 @@ export default function CommandeFormModal({ commande = null, onClose, onSaved })
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       <ChampsCommande form={form} setForm={setForm} edition={edition} />
+
+      <ChampsLivraison livraison={livraison} setLivraison={setLivraison} form={form} setForm={setForm} />
 
       {edition && (
         <section className="form-section">

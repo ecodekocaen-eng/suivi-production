@@ -55,6 +55,7 @@ const EVENEMENTS = {
   ETIQUETTE_IMPORTEE: { Icone: Truck, cls: 'is-file' },
   ETIQUETTES_RENVOYEES: { Icone: Printer, cls: 'is-file' },
   EXPEDITION_ANNULEE: { Icone: Ban },
+  LIVRAISON_MODIFIEE: { Icone: Truck },
 };
 
 function Fait({ label, tone = null, children }) {
@@ -393,7 +394,7 @@ export default function CommandeDetail() {
 
         <aside className="detail-side">
           {/* Expédition : étiquettes Chronopost (atelier, ESAT) ou importées (palette…) */}
-          <Expeditions commande={commande} expeditions={data.expeditions || []} isAdmin={isAdmin} onChange={load} />
+          <Expeditions commande={commande} expeditions={data.expeditions || []} livraison={data.livraison} isAdmin={isAdmin} onChange={load} />
 
           {/* Détails */}
           <div className="card">
@@ -501,7 +502,7 @@ export default function CommandeDetail() {
       )}
       {edition && (
         <CommandeFormModal
-          commande={commande}
+          commande={{ ...commande, livraison: data.livraison }}
           onClose={() => setEdition(false)}
           onSaved={() => { setEdition(false); toast.success('Commande enregistrée'); load(); }}
         />

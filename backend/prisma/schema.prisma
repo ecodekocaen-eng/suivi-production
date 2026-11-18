@@ -89,6 +89,7 @@ model Commande {
   lignes      LigneCommande[]
   impressions Impression[]
   expeditions Expedition[]
+  livraison   Livraison?
 
   @@index([statut])
   @@index([client])
@@ -308,4 +309,16 @@ model Parametre {
   cle       String   @id
   valeur    String
   updatedAt DateTime @updatedAt
+}
+
+// Adresse de livraison et expéditeur d'une commande (18/11/2026) : saisis à la création, ou lus dans le
+// bon de commande PDF du client. Repris par la fenêtre d'étiquette. ⚠️ Table créée au démarrage (bootstrap.js).
+model Livraison {
+  commande     Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  commandeId   Int      @id
+  destinataire String? // JSON : { nom, contact, adresse1, adresse2, cp, ville, pays, telephone, email }
+  expediteur   String? // 'atelier', id d'un expéditeur particulier, ou JSON d'un expéditeur propre à la commande ; vide = selon le client
+  refClient    String? // n° de commande du client (ex. OBJ871848)
+  source       String? // PDF d'où viennent les adresses
+  updatedAt    DateTime @updatedAt
 }

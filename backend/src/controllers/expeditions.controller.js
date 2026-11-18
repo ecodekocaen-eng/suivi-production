@@ -15,6 +15,20 @@ export async function destinataire(req, res) {
   res.json(await service.preparation(req.params.id));
 }
 
+// Adresse de livraison et expéditeur de la commande (formulaire de commande).
+export async function lireLivraison(req, res) {
+  res.json({ livraison: await service.livraisonDeCommande(req.params.id) });
+}
+
+export async function enregistrerLivraison(req, res) {
+  res.json({ livraison: await service.enregistrerLivraison(req.params.id, req.body, req.user) });
+}
+
+// Expéditeurs proposés dans le formulaire de commande (atelier + particuliers), sans coordonnées.
+export async function expediteurs(req, res) {
+  res.json({ expediteurs: reglages.listeExpediteurs(await reglages.lireReglages()) });
+}
+
 export async function creerChronopost(req, res) {
   res.status(201).json({ expedition: await service.creerChronopost(req.params.id, req.body, req.user) });
 }
