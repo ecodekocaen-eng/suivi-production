@@ -59,6 +59,14 @@ export function exportStatsCsv(data, periodeLabel) {
   L.push(row(["Coût d'achat ESAT (€)", data.kpis.coutAchat]));
   L.push(row(['Délai moyen production (j)', data.kpis.delaiMoyenJours ?? '']));
   L.push(row(['À produire (mugs)', data.kpis.aProduire]));
+  L.push(row(['Mugs par commande (moyenne)', data.kpis.mugsParCommande ?? '']));
+  if (data.kpis.nouveauxClients != null) L.push(row(['Nouveaux clients', data.kpis.nouveauxClients]));
+  if (data.ponctualite) {
+    L.push(row(['Expédiées à l’heure (%)', data.ponctualite.taux]));
+    L.push(row(['Expédiées à l’heure', `${data.ponctualite.aLHeure} / ${data.ponctualite.expediees}`]));
+    L.push(row(['Retard moyen des expédiées en retard (j)', data.ponctualite.retardMoyenJours]));
+  }
+  if (data.marge?.prixMoyenVente != null) L.push(row(['Prix de vente moyen (€ / mug)', data.marge.prixMoyenVente]));
   L.push('');
 
   L.push(row(['PAR STATUT', 'Commandes']));
@@ -69,8 +77,9 @@ export function exportStatsCsv(data, periodeLabel) {
   for (const m of data.parMois) L.push(row([fmtMois(m.mois), m.commandes, m.quantite]));
   L.push('');
 
-  L.push(row(['TOP CLIENTS', 'Commandes', 'Mugs']));
-  for (const c of data.topClients) L.push(row([c.client, c.commandes, c.quantite]));
+  const avecCa = data.topClients.some((c) => c.ca != null);
+  L.push(row(['TOP CLIENTS', 'Commandes', 'Mugs', 'Part du volume (%)', ...(avecCa ? ['CA (€)'] : [])]));
+  for (const c of data.topClients) L.push(row([c.client, c.commandes, c.quantite, c.part ?? '', ...(avecCa ? [c.ca ?? ''] : [])]));
   L.push('');
 
   L.push(row(['PAR TYPE DE MUG', 'Commandes', 'Mugs']));

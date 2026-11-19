@@ -1236,3 +1236,7 @@ body.has-modal { overflow: hidden; }
 .lien { background: none; border: 0; padding: 0; color: var(--brand); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .lien:hover { color: var(--text); }
 .expe-livrer { display: flex; flex-direction: column; gap: .2rem; font-size: .88rem; padding-bottom: .65rem; margin-bottom: .65rem; border-bottom: 1px solid var(--border); }
+
+/* ── Statistiques : rang et détail sous les barres (top clients) ── */
+.hbar-rang { display: inline-flex; align-items: center; justify-content: center; min-width: 1.35rem; height: 1.35rem; margin-right: .45rem; border-radius: 6px; background: var(--surface-3); color: var(--muted); font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hbar-sous { font-size: .76rem; color: var(--faint); font-variant-numeric: tabular-nums; }

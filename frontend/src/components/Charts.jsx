@@ -79,8 +79,9 @@ export function LineChart({ labels, titres = labels, series, height = 210 }) {
   );
 }
 
-// Barres horizontales avec libellé + valeur (ex : top clients, types de mug).
-export function HBars({ data, labelKey, valueKey, max, format = fmtNumber, labelFormat = (v) => v, colors = null }) {
+// Barres horizontales avec libellé + valeur (ex : top clients, types de mug). `format` reçoit la
+// valeur et la ligne ; `sous` (facultatif) ajoute une ligne de détail sous la barre.
+export function HBars({ data, labelKey, valueKey, max, format = fmtNumber, labelFormat = (v) => v, colors = null, sous = null, rang = false }) {
   const m = max ?? Math.max(1, ...data.map((d) => d[valueKey]));
   if (!data.length) return <p className="muted small">Pas encore de données.</p>;
   return (
@@ -88,8 +89,8 @@ export function HBars({ data, labelKey, valueKey, max, format = fmtNumber, label
       {data.map((d, i) => (
         <div className="hbar" key={i}>
           <div className="hbar-top">
-            <span className="hbar-label" title={d[labelKey]}>{labelFormat(d[labelKey])}</span>
-            <span className="hbar-val">{format(d[valueKey])}</span>
+            <span className="hbar-label" title={d[labelKey]}>{rang && <span className="hbar-rang">{i + 1}</span>}{labelFormat(d[labelKey])}</span>
+            <span className="hbar-val">{format(d[valueKey], d)}</span>
           </div>
           <div className="hbar-track">
             <div className="hbar-fill" style={{
@@ -97,6 +98,7 @@ export function HBars({ data, labelKey, valueKey, max, format = fmtNumber, label
               ...(colors?.[d[labelKey]] ? { background: colors[d[labelKey]] } : {}),
             }} />
           </div>
+          {sous && <div className="hbar-sous">{sous(d)}</div>}
         </div>
       ))}
     </div>

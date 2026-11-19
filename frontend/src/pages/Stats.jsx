@@ -108,7 +108,7 @@ export default function Stats() {
     );
   }
 
-  const { kpis, deltas, marge, parStatut, parMois, charge, topClients, typesMug, ateliers, retards } = data;
+  const { kpis, ponctualite, deltas, marge, parStatut, parMois, charge, topClients, typesMug, ateliers, retards } = data;
 
   // Production 12 mois + comparaison année précédente
   const mois12 = parMois.slice(-12);
@@ -125,7 +125,8 @@ export default function Stats() {
     .filter(([s, v]) => s !== 'Expédié' && v > 0)
     .map(([s, v]) => ({ label: STATUT_LABELS[s] || s, value: v, color: STATUT_COLORS[s] }));
 
-  const total = kpis.quantiteTotale || 1;
+  const pct = (v) => `${fmtNumber(v)} %`;
+  const nouveaux = kpis.nouveauxClients;
 
   return (
     <>
@@ -133,15 +134,22 @@ export default function Stats() {
 
       {/* KPIs */}
       <div className="kpi-grid">
-        <Kpi icon={Package} label="Mugs produits" value={fmtNumber(kpis.quantiteTotale)} delta={deltas?.mugs} />
+        <Kpi icon={Package} label="Mugs produits" value={fmtNumber(kpis.quantiteTotale)} delta={deltas?.mugs}
+             note={kpis.mugsParCommande != null ? `≈ ${fmtNumber(kpis.mugsParCommande)} mugs par commande` : null} />
         <Kpi icon={ClipboardList} label="Commandes" value={fmtNumber(kpis.nbCommandes)} delta={deltas?.commandes}
-             note={plural(kpis.nbClients, 'client')} />
+             note={`${plural(kpis.nbClients, 'client')}${nouveaux ? ` · dont ${nouveaux} nouveau${nouveaux > 1 ? 'x' : ''}` : ''}`} />
         <Kpi icon={Euro} label="Coût ESAT" value={fmtNumber(Math.round(kpis.coutAchat || 0))} suffix="€" delta={deltas?.cout} />
         <Kpi icon={Factory} label="À produire" value={fmtNumber(kpis.aProduire)} suffix="mugs"
              note={plural(kpis.aProduireCommandes, 'commande')} />
         <Kpi icon={Timer} label="Délai moyen" value={kpis.delaiMoyenJours != null ? fmtNumber(kpis.delaiMoyenJours) : '—'}
-             suffix={kpis.delaiMoyenJours != null ? 'jours' : ''} note="De la commande à l’expédition" />
-        <Kpi icon={Recycle} label="Taux de rebut" value={fmtNumber(kpis.tauxRebut)} suffix="%" />
+             suffix={kpis.delaiMoyenJours != null ? 'jours' : ''}
+             note={ponctualite
+               ? <span title={`Expédiées au plus tard à leur date de sortie : ${ponctualite.aLHeure} sur ${ponctualite.expediees}${ponctualite.enRetard ? ` ; ${ponctualite.enRetard} en retard, de ${fmtNumber(ponctualite.retardMoyenJours)} j en moyenne` : ''}`}>
+                   {pct(ponctualite.taux)} expédiées à l’heure
+                 </span>
+               : 'De la commande à l’expédition'} />
+        <Kpi icon={Recycle} label="Taux de rebut" value={fmtNumber(kpis.tauxRebut)} suffix="%"
+             note={kpis.rebutTotal ? `${plural(kpis.rebutTotal, 'mug')} au rebut` : null} />
       </div>
 
       {/* Rentabilité (admin) */}
@@ -160,6 +168,7 @@ export default function Stats() {
                 <div className="mm"><span className="mm-lbl">Coût ESAT</span><span className="mm-val">{fmtEuro(marge.cout)}</span></div>
                 <div className="mm"><span className="mm-lbl">Marge</span><span className={`mm-val ${marge.marge >= 0 ? 'marge-pos' : 'marge-neg'}`}>{fmtEuro(marge.marge)}</span></div>
                 <div className="mm"><span className="mm-lbl">Taux de marge</span><span className="mm-val">{marge.taux != null ? `${marge.taux} %` : '—'}</span></div>
+                <div className="mm"><span className="mm-lbl">Prix de vente moyen</span><span className="mm-val">{marge.prixMoyenVente != null ? <>{fmtEuro(marge.prixMoyenVente)}<span className="kpi-suffix"> / mug</span></> : '—'}</span></div>
               </div>
             )}
           </div>
@@ -216,12 +225,16 @@ export default function Stats() {
           </div>
         </div>
 
-        {/* Top clients en % */}
+        {/* Top 10 clients : mugs, commandes, part du volume (et chiffre d'affaires pour les admins) */}
         <div className="card">
-          <div className="card-header"><h2 className="card-title"><UsersIcon />Top clients</h2><span className="card-subtitle">Part du volume</span></div>
+          <div className="card-header">
+            <h2 className="card-title"><UsersIcon />Top clients</h2>
+            <span className="card-subtitle">{topClients.length > 1 ? `Les ${topClients.length} premiers, en mugs` : 'En mugs'}</span>
+          </div>
           <div className="card-body">
-            <HBars data={topClients} labelKey="client" valueKey="quantite" max={total}
-                   format={(v) => `${Math.round((v / total) * 100)} %`} />
+            <HBars data={topClients} labelKey="client" valueKey="quantite" rang
+                   format={(v, d) => `${fmtNumber(v)} mugs · ${pct(d.part)}`}
+                   sous={(d) => `${plural(d.commandes, 'commande')}${d.ca != null ? ` · ${fmtEuro(d.ca)} de CA` : ''}`} />
           </div>
         </div>
 

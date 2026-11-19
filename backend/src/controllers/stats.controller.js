@@ -25,6 +25,11 @@ const moisKey = (d) => {
   return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}`;
 };
 
+// Jour du calendrier de Paris (minuit UTC), pour comparer des dates sans heure.
+const jourParis = (d) => new Date(`${new Date(d).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' })}T00:00:00Z`);
+const cleClient = (s) => String(s || '').trim().toUpperCase();
+const r1 = (x) => Math.round(x * 10) / 10;
+
 export async function stats(req, res) {
   const periode = req.query.periode || 'tout';
   const now = new Date();
@@ -79,13 +84,19 @@ export async function stats(req, res) {
   const parClient = new Map(); const parTypeMug = new Map(); const parAtelier = new Map();
   let delaiSomme = 0; let delaiN = 0;
   const bump = (m, k, q) => { const c = m.get(k) || { commandes: 0, quantite: 0 }; c.commandes += 1; c.quantite += q; m.set(k, c); };
+  // Ponctualité : commandes expédiées (date réelle, posée par le passage en « Expédié ») au plus
+  // tard le jour de leur date de sortie.
+  let expediees = 0; let aLHeure = 0; let joursRetard = 0;
+  // Chiffre d'affaires par client (admins : commandes avec un prix de vente).
+  const caParClient = new Map();
 
   for (const c of inPeriod) {
     const q = c.quantite || 0;
     quantiteTotale += q; rebutTotal += c.rebut || 0; coutAchat += prixLigne(c) * q;
-    if (c.client) clients.add(c.client.trim().toUpperCase());
+    if (c.client) clients.add(cleClient(c.client));
     if (parStatut[c.statut] !== undefined) parStatut[c.statut] += 1;
     if (c.client) bump(parClient, c.client.trim(), q);
+    if (c.client && c.prixVente != null) caParClient.set(c.client.trim(), (caParClient.get(c.client.trim()) || 0) + c.prixVente * q);
     bump(parTypeMug, c.typeMug?.trim() || '(non précisé)', q);
     const at = c.atelier?.trim() || '(aucun)';
     parAtelier.set(at, (parAtelier.get(at) || 0) + 1);
@@ -93,7 +104,34 @@ export async function stats(req, res) {
       const j = (new Date(c.dateExpedition) - new Date(c.dateCommande)) / 86400000;
       if (j >= 0 && j < 400) { delaiSomme += j; delaiN += 1; }
     }
+    if (c.statut === STATUT_EXPEDIEE && c.dateExpedition && c.dateLivraison) {
+      expediees += 1;
+      const ecart = Math.round((jourParis(c.dateExpedition) - jourParis(c.dateLivraison)) / 86400000);
+      if (ecart <= 0) aLHeure += 1; else joursRetard += ecart;
+    }
   }
+
+  // Nouveaux clients : leur toute première commande tombe dans la période (sans objet sur « Tout »).
+  let nouveauxClients = null;
+  if (debut || fin) {
+    const premiere = new Map();
+    for (const c of commandes) {
+      if (!c.client || !c.dateCommande) continue;
+      const k = cleClient(c.client);
+      const d = new Date(c.dateCommande);
+      if (!premiere.has(k) || d < premiere.get(k)) premiere.set(k, d);
+    }
+    nouveauxClients = [...clients].filter((k) => {
+      const d = premiere.get(k);
+      return d && (!debut || d >= debut) && (!fin || d <= fin);
+    }).length;
+  }
+  const enRetard = expediees - aLHeure;
+  const ponctualite = expediees ? {
+    expediees, aLHeure, enRetard,
+    taux: r1((aLHeure / expediees) * 100),
+    retardMoyenJours: enRetard ? r1(joursRetard / enRetard) : 0,
+  } : null;
 
   // ── Charge de production (à produire = non expédié) ──
   const chargeMap = new Map();
@@ -134,23 +172,31 @@ export async function stats(req, res) {
 
   // ── Rentabilité (réservée ADMIN) : sur les commandes ayant un prix de vente ──
   let marge = null;
-  if (req.user.role === 'ADMIN') {
-    let ca = 0; let cout = 0; let nb = 0;
+  const admin = req.user.role === 'ADMIN';
+  if (admin) {
+    let ca = 0; let cout = 0; let nb = 0; let mugs = 0;
     for (const c of inPeriod) {
       if (c.prixVente == null) continue;
       const q = c.quantite || 0;
-      ca += c.prixVente * q; cout += prixLigne(c) * q; nb += 1;
+      ca += c.prixVente * q; cout += prixLigne(c) * q; nb += 1; mugs += q;
     }
     const r2 = (x) => Math.round(x * 100) / 100;
     marge = {
       ca: r2(ca), cout: r2(cout), marge: r2(ca - cout),
       taux: ca > 0 ? Math.round(((ca - cout) / ca) * 1000) / 10 : null,
+      prixMoyenVente: mugs > 0 ? r2(ca / mugs) : null,
       nbCommandes: nb, nbTotal: inPeriod.length,
     };
   }
 
-  const topClients = [...parClient.entries()].map(([client, v]) => ({ client, ...v }))
-    .sort((a, b) => b.quantite - a.quantite).slice(0, 8);
+  // Top 10 des clients, en mugs : nombres exacts, part du volume, et chiffre d'affaires pour les admins.
+  const topClients = [...parClient.entries()]
+    .map(([client, v]) => ({
+      client, ...v,
+      part: quantiteTotale ? r1((v.quantite / quantiteTotale) * 100) : 0,
+      ...(admin && caParClient.has(client) ? { ca: Math.round(caParClient.get(client) * 100) / 100 } : {}),
+    }))
+    .sort((a, b) => b.quantite - a.quantite).slice(0, 10);
   const typesMug = [...parTypeMug.entries()].map(([type, v]) => ({ type, ...v })).sort((a, b) => b.quantite - a.quantite);
   const ateliers = [...parAtelier.entries()].map(([atelier, count]) => ({ atelier, count })).sort((a, b) => b.count - a.count);
 
@@ -166,7 +212,10 @@ export async function stats(req, res) {
       delaiMoyenJours: delaiN ? Math.round((delaiSomme / delaiN) * 10) / 10 : null,
       aProduire,
       aProduireCommandes,
+      mugsParCommande: inPeriod.length ? Math.round(quantiteTotale / inPeriod.length) : null,
+      nouveauxClients,
     },
+    ponctualite,
     deltas,
     marge,
     parStatut,
